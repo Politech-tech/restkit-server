@@ -1,0 +1,59 @@
+name: Publish to TestPyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      # Required for trusted publishing
+      id-token: write
+      contents: read
+    
+    steps:
+    - name: Verify version format
+      run: |
+        if [[ ! ${{ github.event.inputs.version }} =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ ]]; then
+          echo "Invalid version format. Must be like v1.0.0 or v1.0.0-rc1"
+          exit 1
+        fi
+
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.version }}
+        fetch-depth: 0
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.12"
+        
+    - name: Verify version matches pyproject.toml
+      run: |
+        VERSION_TAG="${{ github.event.inputs.version }}"
+        VERSION_NO_V="${VERSION_TAG#v}"  # Remove 'v' prefix
+        PYPROJECT_VERSION=$(python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])")
+        if [ "$VERSION_NO_V" != "$PYPROJECT_VERSION" ]; then
+          echo "Version mismatch: Git tag ($VERSION_NO_V) doesn't match pyproject.toml version ($PYPROJECT_VERSION)"
+          exit 1
+        fi
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build tomli
+        
+    - name: Build package
+      run: python -m build
+      
+    - name: Publish to TestPyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
+      # No need for PyPI API token due to trusted publishing
