@@ -8,8 +8,8 @@ This module validates:
 """
 
 import pytest
-from mock_server import MyServer, MyAdvancedServer, Fizz, Foo
-from flask_utils import RestCodes
+from .mock_server import MyServer, MyAdvancedServer, Fizz, Foo
+from restkit_server import RestCodes
 
 
 @pytest.fixture()

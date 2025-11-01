@@ -12,7 +12,7 @@ server for manual testing.
 """
 
 # pylint: disable=E1101
-from flask_utils import SimpleServer, AdvancedServer
+from restkit_server import SimpleServer, AdvancedServer
 import sys
 
 
