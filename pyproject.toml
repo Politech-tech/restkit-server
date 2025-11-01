@@ -1,14 +1,17 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
+requires = [
+    "setuptools>=45",
+    "wheel",
+]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "restkit-server"
-version = "0.1.0.rc1"
+version = "0.1.0-rc2"
 description = "A Flask-based REST server toolkit for rapid API development"
 readme = "README.md"
 authors = [
-    {name = "Politech-tech", email = "ido.shafrir@gmail.com"}
+    { name = "Politech-tech", email = "ido.shafrir@gmail.com" },
 ]
 license = "MIT"
 requires-python = ">=3.6"
@@ -27,8 +30,10 @@ dependencies = [
 Homepage = "https://github.com/Politech-tech/restkit-server"
 Repository = "https://github.com/Politech-tech/restkit-server.git"
 
-[tool.setuptools]
-package-dir = {"" = "src"}
+[tool.setuptools.package-dir]
+"" = "src"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = [
+    "src",
+]
