@@ -1,0 +1,144 @@
+---
+name: Linters
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  flake8:
+    name: flake8
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt || echo "No requirements file found."
+          pip install flake8
+
+      - name: Create .flake8 config file
+        run: |
+          cat << EOF > .flake8
+          [flake8]
+          max-line-length = 150
+          # Align ignores with disabled pylint conventions:
+          # E402 (module level import not at top), W291 (trailing whitespace),
+          # W292 (no newline at end of file), W391 (blank line at end of file)
+          ignore = E402,W291,W292,W391,E265,F824,W293,E266,E261
+          EOF
+
+      - name: Run Flake8
+        run: flake8 . --config=.flake8
+
+  pylint:
+    name: pylint
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt || echo "No requirements file found."
+          pip install pylint
+
+      - name: setup config
+        run: |
+          cat << EOF > .pylintrc
+          [MESSAGES CONTROL]
+          disable=C0201,C0303,C0304,C0305,C0104,C0411,E0401,C0413,C0103,E0402,C0325,W,R
+          enable=W0141,R1710,R1705
+
+
+          [FORMAT]
+          max-line-length=150
+
+          [REPORTS]
+          output-format=colorized
+          reports=no
+          EOF
+
+      - name: Run PyLint
+        run: |
+          echo "https://github.com/sprytnyk/pylint-errors?tab=readme-ov-file - error codes"
+          pylint $(find . -name "*.py" | xargs) --rcfile=.pylintrc
+
+  yaml-lint:
+    name: YAML Linter
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Create .yamllint config file
+        run: |
+          cat << EOF > .yamllint
+          extends: default
+          rules:
+            line-length:
+              max: 150
+          EOF
+      - name: Install yamllint
+        run: sudo apt-get update && sudo apt-get install -y yamllint
+
+      - name: Run yamllint
+        run: yamllint .
+
+  json-lint:
+    name: JSON Linter
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install  json linter
+        run: pip install json-linter
+
+      - name: Run check-json
+        run: |
+          files=$(find . -name "*.json" | xargs)
+          if [ -z "$files" ]; then
+            echo "No JSON files found."
+            exit 0
+          else
+            json-linter $files
+          fi
+
+  dockerfile-lint:
+    name: Dockerfile Linter
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install hadolint
+        run: |
+          wget -O /tmp/hadolint "https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64"
+          chmod +x /tmp/hadolint
+          sudo mv /tmp/hadolint /usr/local/bin/
+
+      - name: Run hadolint
+        run: |
+          files=$(find . -name "Dockerfile" | xargs)
+          if [ -z "$files" ]; then
+            echo "No Dockerfile found."
+            exit 0
+          else
+            hadolint $files
+          fi

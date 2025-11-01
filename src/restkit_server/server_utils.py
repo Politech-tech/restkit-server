@@ -20,7 +20,7 @@ except ImportError:  # Fallback to path manipulation when not in a package conte
     THIS_DIR = os.path.dirname(os.path.abspath(__file__))
     if THIS_DIR not in sys.path:
         sys.path.append(THIS_DIR)
-    from logger import setup_logger, LoggerWriter, enter_exit_logger
+    from logger import setup_logger, LoggerWriter
 
 
 class RestCodes(Enum):
