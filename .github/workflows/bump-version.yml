@@ -16,6 +16,10 @@ on:
           - bugfix
           - breaking
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   bump-version:
     runs-on: ubuntu-latest
@@ -24,9 +28,17 @@ jobs:
       pull-requests: write
 
     steps:
+    - name: Configure SSH
+      run: |
+        mkdir -p ~/.ssh/
+        echo "${{ secrets.WORKFLOW_KEY }}" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+        ssh-keyscan github.com >> ~/.ssh/known_hosts
+
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Fetch all history for changelog generation
+        ssh-key: ${{ secrets.WORKFLOW_KEY }}
 
     - name: Verify version format
       run: |
@@ -89,30 +101,13 @@ jobs:
         CHANGELOG="${CHANGELOG//$'\r'/'%0D'}"
         echo "changelog=$CHANGELOG" >> $GITHUB_OUTPUT
 
-    - name: Create Pull Request
-      id: create-pr
-      uses: peter-evans/create-pull-request@v5
-      with:
-        title: "chore: bump version to ${{ github.event.inputs.version }}"
-        body: |
-          Bumps version to ${{ github.event.inputs.version }}
-          
-          # Changelog
-          ${{ steps.changelog.outputs.changelog }}
-        branch: "bump-version-${{ github.event.inputs.version }}"
-        commit-message: "chore: bump version to ${{ github.event.inputs.version }}"
-        labels: version-bump
-
-    - name: Auto-approve PR
-      uses: hmarr/auto-approve-action@v3
-      with:
-        pull-request-number: ${{ steps.create-pr.outputs.pull-request-number }}
-
-    - name: Merge Pull Request
+    - name: Commit and push version bump
       run: |
-        gh pr merge ${{ steps.create-pr.outputs.pull-request-number }} --admin --squash
-      env:
-        GH_TOKEN: ${{ github.token }}
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add pyproject.toml CHANGELOG.md
+        git commit -m "chore: bump version to ${{ github.event.inputs.version }}"
+        git push
 
     - name: Create and push tag
       run: |
