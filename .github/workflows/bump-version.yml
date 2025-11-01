@@ -1,0 +1,133 @@
+name: Bump Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'New version number (e.g., 1.0.0)'
+        required: true
+        type: string
+      release_type:
+        description: 'Type of release'
+        required: true
+        type: choice
+        options:
+          - feature
+          - bugfix
+          - breaking
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history for changelog generation
+
+    - name: Verify version format
+      run: |
+        if [[ ! ${{ github.event.inputs.version }} =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ ]]; then
+          echo "Invalid version format. Must be like 1.0.0 or 1.0.0-rc1"
+          exit 1
+        fi
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.12"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install tomli tomli-w
+
+    - name: Update version in pyproject.toml
+      run: |
+        python - <<EOF
+        import tomli
+        import tomli_w
+        
+        # Read current pyproject.toml
+        with open('pyproject.toml', 'rb') as f:
+            data = tomli.load(f)
+        
+        # Update version
+        data['project']['version'] = '${{ github.event.inputs.version }}'
+        
+        # Write updated pyproject.toml
+        with open('pyproject.toml', 'wb') as f:
+            tomli_w.dump(data, f)
+        EOF
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Get the current tag to compare against
+        CURRENT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        
+        if [ -z "$CURRENT_TAG" ]; then
+          # If no tags exist, get all commits
+          COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges)
+        else
+          # Get commits since last tag
+          COMMITS=$(git log ${CURRENT_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+        fi
+        
+        # Create changelog content
+        echo "# Changes in v${{ github.event.inputs.version }}" > CHANGELOG.md
+        echo "" >> CHANGELOG.md
+        echo "## What's Changed" >> CHANGELOG.md
+        echo "$COMMITS" >> CHANGELOG.md
+        
+        # Store changelog for release
+        CHANGELOG="${COMMITS//'%'/'%25'}"
+        CHANGELOG="${CHANGELOG//$'\n'/'%0A'}"
+        CHANGELOG="${CHANGELOG//$'\r'/'%0D'}"
+        echo "changelog=$CHANGELOG" >> $GITHUB_OUTPUT
+
+    - name: Create Pull Request
+      id: create-pr
+      uses: peter-evans/create-pull-request@v5
+      with:
+        title: "chore: bump version to ${{ github.event.inputs.version }}"
+        body: |
+          Bumps version to ${{ github.event.inputs.version }}
+          
+          # Changelog
+          ${{ steps.changelog.outputs.changelog }}
+        branch: "bump-version-${{ github.event.inputs.version }}"
+        commit-message: "chore: bump version to ${{ github.event.inputs.version }}"
+        labels: version-bump
+
+    - name: Auto-approve PR
+      uses: hmarr/auto-approve-action@v3
+      with:
+        pull-request-number: ${{ steps.create-pr.outputs.pull-request-number }}
+
+    - name: Merge Pull Request
+      run: |
+        gh pr merge ${{ steps.create-pr.outputs.pull-request-number }} --admin --squash
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+    - name: Create and push tag
+      run: |
+        git fetch origin main
+        git checkout main
+        git pull
+        git tag -a "v${{ github.event.inputs.version }}" -m "Release v${{ github.event.inputs.version }}"
+        git push origin "v${{ github.event.inputs.version }}"
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: "v${{ github.event.inputs.version }}"
+        name: "Release v${{ github.event.inputs.version }}"
+        body: ${{ steps.changelog.outputs.changelog }}
+        draft: false
+        prerelease: ${{ contains(github.event.inputs.version, '-rc') }}
+        token: ${{ github.token }}
