@@ -16,6 +16,10 @@ on:
           - bugfix
           - breaking
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   bump-version:
     runs-on: ubuntu-latest
@@ -93,6 +97,7 @@ jobs:
       id: create-pr
       uses: peter-evans/create-pull-request@v5
       with:
+        token: ${{ secrets.IDO_PAT}}
         title: "chore: bump version to ${{ github.event.inputs.version }}"
         body: |
           Bumps version to ${{ github.event.inputs.version }}
@@ -107,12 +112,13 @@ jobs:
       uses: hmarr/auto-approve-action@v3
       with:
         pull-request-number: ${{ steps.create-pr.outputs.pull-request-number }}
+  
 
     - name: Merge Pull Request
       run: |
         gh pr merge ${{ steps.create-pr.outputs.pull-request-number }} --admin --squash
       env:
-        GH_TOKEN: ${{ github.token }}
+        GH_TOKEN: ${{ secrets.IDO_PAT }}
 
     - name: Create and push tag
       run: |
