@@ -14,13 +14,9 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from functools import wraps
 
-try:  # Prefer package-relative import
-    from .logger import setup_logger, LoggerWriter  # type: ignore
-except ImportError:  # Fallback to path manipulation when not in a package context
-    THIS_DIR = os.path.dirname(os.path.abspath(__file__))
-    if THIS_DIR not in sys.path:
-        sys.path.append(THIS_DIR)
-    from logger import setup_logger, LoggerWriter
+
+from .logger import setup_logger, LoggerWriter, enter_exit_logger  # type: ignore
+
 
 
 class RestCodes(Enum):
@@ -105,6 +101,9 @@ class MetaSimpleServer(type):
         this magic method is called when a new class is created 
         it will iterate over all the methods in the class and if the method doesn't start with `_` it will be registered as a REST endpoint.
         """
+        # Methods that should not be registered as endpoints
+        excluded_methods = {'set_verbose'}
+        
         # create the new instance than update it, this is done
         # so we can inspect the methods of the new instance with its hierarchy
         # other wise we would only see the methods of the base class
@@ -114,9 +113,10 @@ class MetaSimpleServer(type):
         # predicate checks for both functions and methods by lambda if either is true it will return the member
         all_attrs = inspect.getmembers(new_instance, predicate=lambda x: inspect.isfunction(x) or inspect.ismethod(x))       
         for key, value in all_attrs:
-            if not key.startswith("_"):
+            if not key.startswith("_") and key not in excluded_methods:
                 # Register the method as a REST endpoint
-                new_method = mcs._wrap_endpoint(value)
+                # Use the class name as logger name for unified logging
+                new_method = mcs._wrap_endpoint(value, logger_name=name)
                 setattr(new_instance, key, new_method)
                 new_instance._endpoint_map[f'/{key}'] = key
 
@@ -140,14 +140,18 @@ class MetaSimpleServer(type):
         return new_instance
         
     @classmethod
-    def _wrap_endpoint(mcs, func):
+    def _wrap_endpoint(mcs, func, logger_name=None):
         """
         Wrap a method to be a REST endpoint.
 
         If the function has parameters, they will be extracted from the request and passed to the function.
 
         """
-        # 
+        # Apply enter_exit_logger decorator first with the function's qualified name
+        # If logger_name is not provided, use the function's qualified name
+        if logger_name is None:
+            logger_name = func.__qualname__ if hasattr(func, '__qualname__') else func.__name__
+        func = enter_exit_logger(logger_name)(func)
 
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -226,7 +230,7 @@ class SimpleServer(metaclass=MetaSimpleServer):
             return f'{var1=}, {var2=}, {var3=}'
 
     """
-    def __init__(self, demo_mode: bool = False, app_name: str = "simple_server"):
+    def __init__(self, demo_mode: bool = False, app_name: str = "simple_server", verbose: bool = False) -> None:
         """
         Initializes the server application.
             
@@ -234,6 +238,8 @@ class SimpleServer(metaclass=MetaSimpleServer):
             :type demo_mode: bool, optional
             :param app_name: The name of the application.
             :type app_name: str, optional
+            :param verbose: If True, enables verbose logging.
+            :type verbose: bool, optional
 
             :ivar demo_mode: Indicates whether the server is running in demo mode.
             :ivar app: The Flask application instance.
@@ -257,6 +263,8 @@ class SimpleServer(metaclass=MetaSimpleServer):
         self._original_stderr = sys.stderr
         sys.stdout = LoggerWriter(self.logger, level=20)  # INFO
         sys.stderr = LoggerWriter(self.logger, level=40)  # ERROR
+        self.set_verbose(verbose)
+
 
         self.run = self.app.run
         if self.demo_mode:
@@ -268,10 +276,44 @@ class SimpleServer(metaclass=MetaSimpleServer):
 
         self._register_endpoints()
 
+    @property
+    def verbose(self) -> bool:
+        """
+        Returns whether verbose logging is enabled.
+
+        :return: True if verbose logging is enabled, False otherwise.
+        :rtype: bool
+        """
+        return self._verbose
+
+    def set_verbose(self, verbose: bool) -> None:
+        """
+        Sets the verbose logging mode.
+
+        :param verbose: True to enable verbose logging, False to disable.
+        :type verbose: bool
+        """
+        self._verbose = verbose
+
+        if self._verbose:
+            self.logger.setLevel("DEBUG")
+            # Also update all handlers to DEBUG level
+            for handler in self.logger.handlers:
+                handler.setLevel("DEBUG")
+            self.logger.debug("Verbose logging enabled.")
+        else:
+            self.logger.setLevel("INFO")
+            # Set handlers back to INFO level
+            for handler in self.logger.handlers:
+                handler.setLevel("INFO")
+            self.logger.info("Verbose logging disabled.")
+
+
     def _register_endpoints(self):
         for route, func_name in self._endpoint_map.items():
             methods = self._endpoint_method_map.get(func_name, ["GET", "POST"])
-            self.app.route(route, methods=methods)(getattr(self, func_name))
+            func = getattr(self, func_name)
+            self.app.route(route, methods=methods)(func)
 
     def index(self) -> tuple:
         """
@@ -352,7 +394,9 @@ class AdvancedServer(SimpleServer):
         if (inspect.ismethod(value) or inspect.isfunction(value)) and not name.startswith("_") and name not in ['run', 'app']:
             # Wrap the method if not already wrapped
             if not getattr(value, '_is_wrapped', False):
-                value = MetaSimpleServer._wrap_endpoint(value)
+                # Use the server's logger name for all unit methods
+                server_logger_name = getattr(self, 'logger_name', self.__class__.__name__)
+                value = MetaSimpleServer._wrap_endpoint(value, logger_name=server_logger_name)
                 value.__name__ = name
                 value._is_wrapped = True
                 # Add to endpoint map
@@ -360,12 +404,14 @@ class AdvancedServer(SimpleServer):
 
         super().__setattr__(name, value)
 
-    def __init__(self, demo_mode: bool = False, app_name: str | None = None, unit_instances: dict | None = None) -> None:
+    def __init__(self, demo_mode: bool = False, app_name: str | None = None, unit_instances: dict | None = None, verbose: bool = False) -> None:
         """
         :param demo_mode: Whether to run the server in demo mode.
         :param app_name: The name of the application.
         :param unit_instances: A dictionary of unit instances to register with the server.
          the unit dictionary maps unit names to their instances. i.e. {'foo': Foo(), 'fizz': Fizz()}
+        :param verbose: Whether to enable verbose logging.
+
         :return: None
         """
 
@@ -378,6 +424,8 @@ class AdvancedServer(SimpleServer):
             # predicate checks for both functions and methods by lambda if either is true it will return the member
             for method_name, method in inspect.getmembers(inst, predicate=lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
                 if not method_name.startswith("_"):
+                    # setattr will trigger __setattr__ which wraps the method with _wrap_endpoint
+                    # _wrap_endpoint will use the server's logger (app_name) for all unit methods
                     setattr(self, f'{unit_name}_{method_name}', method)
 
             for property_name, _ in inspect.getmembers(inst.__class__, predicate=lambda x: isinstance(x, property)):
@@ -402,4 +450,4 @@ class AdvancedServer(SimpleServer):
                     self._endpoint_map[new_path] = value
                     del self._endpoint_map[path]
         # after all unit instances have been processed super will generate the app
-        super().__init__(demo_mode, app_name=app_name)
+        super().__init__(demo_mode, app_name=app_name, verbose=verbose)

@@ -26,12 +26,12 @@ class MyServer(SimpleServer):
      - /post_example (POST only)
     """
 
-    def __init__(self, demo_mode: bool = False, app_name: str = "MyServerApp"):
+    def __init__(self, demo_mode: bool = False, app_name: str = "MyServerApp", verbose: bool = False):
         """Initialize server and declare HTTP method constraints for endpoints."""
         self._endpoint_method_map['post_example'] = ['POST']
         self._server_property_counter = 0
         self._another_property_value = "initial"
-        super().__init__(demo_mode=demo_mode, app_name=app_name)
+        super().__init__(demo_mode=demo_mode, app_name=app_name, verbose=verbose)
 
     def hello_world(self) -> dict:
         """Return a simple hello world JSON payload."""
@@ -106,9 +106,9 @@ class Fizz:
 class MyAdvancedServer(AdvancedServer):
     """AdvancedServer subclass adding a custom /hello endpoint."""
 
-    def __init__(self, demo_mode: bool = False, unit_instances: dict | None = None) -> None:
+    def __init__(self, demo_mode: bool = False, unit_instances: dict | None = None, app_name: str = "MyAdvancedServerApp", verbose: bool = False) -> None:
         """Initialize with optional unit instances mapping for dynamic exposure."""
-        super().__init__(demo_mode=demo_mode, app_name="MyAdvancedServerApp", unit_instances=unit_instances)
+        super().__init__(demo_mode=demo_mode, app_name=app_name, unit_instances=unit_instances, verbose=verbose)
 
     def hello(self) -> dict:
         """Return a greeting specific to MyAdvancedServer."""
@@ -118,9 +118,9 @@ class MyAdvancedServer(AdvancedServer):
 if __name__ == "__main__":
     """Launch either the simple or advanced server based on CLI arg."""
     if len(sys.argv) > 1 and sys.argv[1] == "simple":
-        server = MyServer(demo_mode=True)
+        server = MyServer(demo_mode=True, verbose=True)
     else:
         units = {'foo': Foo(), 'fizz': Fizz()}
-        server = MyAdvancedServer(demo_mode=True, unit_instances=units)  
+        server = MyAdvancedServer(demo_mode=True, unit_instances=units, verbose=True)
 
     server.run(host="0.0.0.0", port=5001)
