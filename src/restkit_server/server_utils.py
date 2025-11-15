@@ -120,6 +120,23 @@ class MetaSimpleServer(type):
                 setattr(new_instance, key, new_method)
                 new_instance._endpoint_map[f'/{key}'] = key
 
+        for property_name, property_obj in inspect.getmembers(new_instance, predicate=lambda x: isinstance(x, property)):
+            if not property_name.startswith("_"):
+                # Create a getter method for the property endpoint 
+                # Use a factory function to capture property_name correctly in the closure
+                def make_property_getter(prop_name):
+                    def property_getter(self):
+                        return getattr(self, prop_name)
+                    property_getter.__name__ = f'_property_getter_{prop_name}'
+                    return property_getter
+
+                property_getter = make_property_getter(property_name)
+                wrapped_getter = mcs._wrap_endpoint(property_getter)
+                wrapped_getter.__name__ = f'_property_getter_{property_name}'
+                
+                setattr(new_instance, f'_property_getter_{property_name}', wrapped_getter)
+                new_instance._endpoint_map[f'/property/{property_name}'] = f'_property_getter_{property_name}'
+
         return new_instance
         
     @classmethod
@@ -363,11 +380,12 @@ class AdvancedServer(SimpleServer):
                 if not method_name.startswith("_"):
                     setattr(self, f'{unit_name}_{method_name}', method)
 
-            for property_name, property_value in inspect.getmembers(inst.__class__, predicate=lambda x: isinstance(x, property)):
+            for property_name, _ in inspect.getmembers(inst.__class__, predicate=lambda x: isinstance(x, property)):
                 if not property_name.startswith("_"):
 
                     def property_getter(prop_name=property_name, unit_inst=inst):
-                        return getattr(unit_inst, prop_name)                
+                        return getattr(unit_inst, prop_name)
+                         
                     setattr(self, f'{unit_name}_property_{property_name}', property_getter)        
 
             # Update endpoint paths for a pretty path /unit_method -> /unit/method

@@ -29,6 +29,8 @@ class MyServer(SimpleServer):
     def __init__(self, demo_mode: bool = False, app_name: str = "MyServerApp"):
         """Initialize server and declare HTTP method constraints for endpoints."""
         self._endpoint_method_map['post_example'] = ['POST']
+        self._server_property_counter = 0
+        self._another_property_value = "initial"
         super().__init__(demo_mode=demo_mode, app_name=app_name)
 
     def hello_world(self) -> dict:
@@ -46,6 +48,17 @@ class MyServer(SimpleServer):
     def post_example(self, var1, var2, var3='default') -> str:
         """Echo provided POST arguments (demonstrates JSON param binding)."""
         return f'{var1=}, {var2=}, {var3=}'
+
+    @property
+    def server_property(self):
+        """Return a greeting from MyServer.server_property."""
+        self._server_property_counter += 1
+        return {"message": "Hello from MyServer.server_property!", "access_count": self._server_property_counter}
+
+    @property
+    def another_property(self):
+        """Return the current value from MyServer.another_property."""
+        return {"message": "Hello from MyServer.another_property!", "value": self._another_property_value}
 
 
 class Foo:
@@ -107,7 +120,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "simple":
         server = MyServer(demo_mode=True)
     else:
-        units = {'foo': Foo()}  #, 'fizz': Fizz()}
+        units = {'foo': Foo(), 'fizz': Fizz()}
         server = MyAdvancedServer(demo_mode=True, unit_instances=units)  
 
     server.run(host="0.0.0.0", port=5001)
