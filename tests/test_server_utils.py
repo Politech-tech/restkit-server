@@ -128,3 +128,46 @@ class TestAdvancedServer:
         assert response.get_json()['data']['message'] == "Hello from Foo.echo!"
         assert response.get_json()['data']['kwargs'] == {'var1': 'value1', 'var2': [1, 2, 3]}
         assert response.get_json()['status'] == RestCodes.OK.name
+
+    def test_foo_static_method(self, advanced_server):
+        """Verify /foo/test_static endpoint calls Foo's static method."""
+        client = advanced_server.app.test_client()
+        response = client.get("/foo/test_static")
+        assert response.status_code == RestCodes.OK.value
+        assert response.get_json()['data'] == {"message": "Hello from Foo.test_static!"}
+        assert response.get_json()['status'] == RestCodes.OK.name
+
+    def test_foo_class_method(self, advanced_server):
+        """Verify /foo/test_class_method endpoint calls Foo's class method."""
+        client = advanced_server.app.test_client()
+        response = client.get("/foo/test_class_method")
+        assert response.status_code == RestCodes.OK.value
+        assert response.get_json()['data'] == {"message": "Hello from Foo.test_class_method!"}
+        assert response.get_json()['status'] == RestCodes.OK.name
+
+    def test_foo_property_getter(self, advanced_server):
+        """Verify /foo/property/test_property endpoint accesses Foo's property getter."""
+        client = advanced_server.app.test_client()
+        response = client.get("/foo/property/test_property")
+        assert response.status_code == RestCodes.OK.value
+        data = response.get_json()['data']
+        assert data['message'] == "Hello from Foo.test_property!"
+        assert 'access_count' in data
+        assert response.get_json()['status'] == RestCodes.OK.name
+        
+        # Verify property is actually called each time
+        response2 = client.get("/foo/property/test_property")
+        data2 = response2.get_json()['data']
+        assert data2['access_count'] == data['access_count'] + 1
+
+    def test_property_endpoints_exist(self, advanced_server):
+        """Verify that properties are mapped to /unit/property/name endpoints."""
+        # Check that the property endpoint is in the endpoint map
+        property_endpoint = '/foo/property/test_property'
+        assert property_endpoint in advanced_server._endpoint_map
+        
+    def test_static_and_class_methods_exist(self, advanced_server):
+        """Verify that static and class methods are registered as endpoints."""
+        # Check that static and class method endpoints exist
+        assert '/foo/test_static' in advanced_server._endpoint_map
+        assert '/foo/test_class_method' in advanced_server._endpoint_map

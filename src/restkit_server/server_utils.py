@@ -111,7 +111,8 @@ class MetaSimpleServer(type):
         attrs['_endpoint_map'] = {}
         attrs['_endpoint_method_map'] = {}
         new_instance = super().__new__(mcs, name, bases, attrs) 
-        all_attrs = inspect.getmembers(new_instance, predicate=inspect.isfunction)
+        # predicate checks for both functions and methods by lambda if either is true it will return the member
+        all_attrs = inspect.getmembers(new_instance, predicate=lambda x: inspect.isfunction(x) or inspect.ismethod(x))       
         for key, value in all_attrs:
             if not key.startswith("_"):
                 # Register the method as a REST endpoint
@@ -357,12 +358,27 @@ class AdvancedServer(SimpleServer):
             # add instance to the server as a discrete attribute
             setattr(self, f'_{unit_name}', inst)
             # register all public methods of the unit instance as endpoint methods
-            for method_name, method in inspect.getmembers(inst, predicate=inspect.ismethod):
+            # predicate checks for both functions and methods by lambda if either is true it will return the member
+            for method_name, method in inspect.getmembers(inst, predicate=lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
                 if not method_name.startswith("_"):
                     setattr(self, f'{unit_name}_{method_name}', method)
 
+            for property_name, property_value in inspect.getmembers(inst.__class__, predicate=lambda x: isinstance(x, property)):
+                if not property_name.startswith("_"):
+
+                    def property_getter(prop_name=property_name, unit_inst=inst):
+                        return getattr(unit_inst, prop_name)                
+                    setattr(self, f'{unit_name}_property_{property_name}', property_getter)        
+
             # Update endpoint paths for a pretty path /unit_method -> /unit/method
             for path, value in list(self._endpoint_map.items()):
+                
+                if path.startswith(f'/{unit_name}_property_'):
+                    new_path = path.replace(f'/{unit_name}_property_', f'/{unit_name}/property/')
+                    self._endpoint_map[new_path] = value
+                    del self._endpoint_map[path]
+                    continue
+
                 if path.startswith(f'/{unit_name}_'):
                     new_path = path.replace(f'/{unit_name}_', f'/{unit_name}/')
                     self._endpoint_map[new_path] = value
