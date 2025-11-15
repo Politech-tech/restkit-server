@@ -34,7 +34,7 @@ jobs:
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
-          pip install pytest
+          pip install pytest pytest-cov
 
       - name: Install package
         run: |
@@ -45,8 +45,16 @@ jobs:
           python -V
           pip list
 
-      - name: Run tests
+      - name: Run tests with coverage
         env:
           PYTHONPATH: ${{ github.workspace }}
         run: |
-          pytest -q --maxfail=1 --disable-warnings -vv
+          pytest -q --maxfail=1 --disable-warnings -vv --cov --cov-report=term-missing --cov-report=html --cov-fail-under=75
+
+      - name: Upload coverage report
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+          retention-days: 30

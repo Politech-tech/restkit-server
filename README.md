@@ -1,5 +1,8 @@
 # RestKit Server
 
+[![Tests](https://github.com/Politech-tech/restkit-server/actions/workflows/tests.yml/badge.svg)](https://github.com/Politech-tech/restkit-server/actions/workflows/tests.yml)
+[![Coverage](https://img.shields.io/badge/coverage-89%25-brightgreen)](https://github.com/Politech-tech/restkit-server/actions/workflows/tests.yml)
+
 A Flask-based REST server toolkit providing simple and advanced server implementations.
 
 ## Installation
