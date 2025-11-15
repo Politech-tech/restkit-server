@@ -56,12 +56,15 @@ def setup_logger(name: str, stream_log_level: str = 'INFO') -> Logger:
 def enter_exit_logger(logger):
     """
     this function will log the entry and exit of a function
-    :param logger: the logger to use
-    :type logger: Logger
+    :param logger: the logger name to use
+    :type logger: str
     :return: the decorator
     :rtype: function
     """
+    from functools import wraps
+    logger = getLogger(logger)
     def decorator(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
 
             if len(args) > 0 and hasattr(args[0].__class__, func.__name__):
@@ -69,9 +72,9 @@ def enter_exit_logger(logger):
             else:
                 print_args = args
 
-            logger.debug(f'Entering {func.__name__}, args: {print_args}, {kwargs=}')
+            logger.debug(f'Entering {func.__qualname__}, args: {print_args}, {kwargs=}')
             result = func(*args, **kwargs)
-            logger.debug(f'Exiting {func.__name__}')
+            logger.debug(f'Exiting {func.__qualname__}')
             return result
         return wrapper
     return decorator
