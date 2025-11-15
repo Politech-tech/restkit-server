@@ -23,7 +23,7 @@ def simple_server():
 @pytest.fixture()
 def advanced_server():
     """Provide an AdvancedServer instance with Foo & Fizz units registered for testing."""
-    server = MyAdvancedServer(demo_mode=True, unit_instances={'foo': Foo(), "fizz": Fizz()})
+    server = MyAdvancedServer(demo_mode=True, unit_instances={'foo': Foo(), "fizz": Fizz()}, app_name="TestAdvancedServerApp", verbose=True)
     server.app.config['TESTING'] = True
     yield server
 
