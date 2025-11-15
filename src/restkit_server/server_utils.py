@@ -111,13 +111,31 @@ class MetaSimpleServer(type):
         attrs['_endpoint_map'] = {}
         attrs['_endpoint_method_map'] = {}
         new_instance = super().__new__(mcs, name, bases, attrs) 
-        all_attrs = inspect.getmembers(new_instance, predicate=inspect.isfunction)
+        # predicate checks for both functions and methods by lambda if either is true it will return the member
+        all_attrs = inspect.getmembers(new_instance, predicate=lambda x: inspect.isfunction(x) or inspect.ismethod(x))       
         for key, value in all_attrs:
             if not key.startswith("_"):
                 # Register the method as a REST endpoint
                 new_method = mcs._wrap_endpoint(value)
                 setattr(new_instance, key, new_method)
                 new_instance._endpoint_map[f'/{key}'] = key
+
+        for property_name, property_obj in inspect.getmembers(new_instance, predicate=lambda x: isinstance(x, property)):
+            if not property_name.startswith("_"):
+                # Create a getter method for the property endpoint 
+                # Use a factory function to capture property_name correctly in the closure
+                def make_property_getter(prop_name):
+                    def property_getter(self):
+                        return getattr(self, prop_name)
+                    property_getter.__name__ = f'_property_getter_{prop_name}'
+                    return property_getter
+
+                property_getter = make_property_getter(property_name)
+                wrapped_getter = mcs._wrap_endpoint(property_getter)
+                wrapped_getter.__name__ = f'_property_getter_{property_name}'
+                
+                setattr(new_instance, f'_property_getter_{property_name}', wrapped_getter)
+                new_instance._endpoint_map[f'/property/{property_name}'] = f'_property_getter_{property_name}'
 
         return new_instance
         
@@ -357,12 +375,28 @@ class AdvancedServer(SimpleServer):
             # add instance to the server as a discrete attribute
             setattr(self, f'_{unit_name}', inst)
             # register all public methods of the unit instance as endpoint methods
-            for method_name, method in inspect.getmembers(inst, predicate=inspect.ismethod):
+            # predicate checks for both functions and methods by lambda if either is true it will return the member
+            for method_name, method in inspect.getmembers(inst, predicate=lambda x: inspect.isfunction(x) or inspect.ismethod(x)):
                 if not method_name.startswith("_"):
                     setattr(self, f'{unit_name}_{method_name}', method)
 
+            for property_name, _ in inspect.getmembers(inst.__class__, predicate=lambda x: isinstance(x, property)):
+                if not property_name.startswith("_"):
+
+                    def property_getter(prop_name=property_name, unit_inst=inst):
+                        return getattr(unit_inst, prop_name)
+                         
+                    setattr(self, f'{unit_name}_property_{property_name}', property_getter)        
+
             # Update endpoint paths for a pretty path /unit_method -> /unit/method
             for path, value in list(self._endpoint_map.items()):
+                
+                if path.startswith(f'/{unit_name}_property_'):
+                    new_path = path.replace(f'/{unit_name}_property_', f'/{unit_name}/property/')
+                    self._endpoint_map[new_path] = value
+                    del self._endpoint_map[path]
+                    continue
+
                 if path.startswith(f'/{unit_name}_'):
                     new_path = path.replace(f'/{unit_name}_', f'/{unit_name}/')
                     self._endpoint_map[new_path] = value
