@@ -82,6 +82,69 @@ class TestSimpleServer:
         response = client.get("/post_example", json={"var1": "value1", "var2": "value2"})
         assert response.status_code == 405
 
+    def test_simple_server_property_getter(self, simple_server):
+        """Verify /property/server_property endpoint accesses MyServer's property getter."""
+        client = simple_server.app.test_client()
+        response = client.get("/property/server_property")
+        assert response.status_code == RestCodes.OK.value
+        data = response.get_json()['data']
+        assert data['message'] == "Hello from MyServer.server_property!"
+        assert 'access_count' in data
+        assert response.get_json()['status'] == RestCodes.OK.name
+        
+        # Verify property is actually called each time and counter increments
+        response2 = client.get("/property/server_property")
+        data2 = response2.get_json()['data']
+        assert data2['access_count'] == data['access_count'] + 1
+
+    def test_simple_server_property_endpoint_exists(self, simple_server):
+        """Verify that SimpleServer properties are mapped to /property/name endpoints."""
+        # Check that the property endpoint is in the endpoint map
+        property_endpoint = '/property/server_property'
+        assert property_endpoint in simple_server._endpoint_map
+
+    def test_simple_server_second_property_getter(self, simple_server):
+        """Verify /property/another_property endpoint accesses MyServer's second property getter."""
+        client = simple_server.app.test_client()
+        response = client.get("/property/another_property")
+        assert response.status_code == RestCodes.OK.value
+        data = response.get_json()['data']
+        assert data['message'] == "Hello from MyServer.another_property!"
+        assert data['value'] == "initial"
+        assert response.get_json()['status'] == RestCodes.OK.name
+
+    def test_multiple_properties_coexist(self, simple_server):
+        """Verify that multiple properties can coexist and be accessed independently."""
+        client = simple_server.app.test_client()
+        
+        # Check both properties are in the endpoint map
+        assert '/property/server_property' in simple_server._endpoint_map
+        assert '/property/another_property' in simple_server._endpoint_map
+        
+        # Access first property
+        response1 = client.get("/property/server_property")
+        assert response1.status_code == RestCodes.OK.value
+        data1 = response1.get_json()['data']
+        assert data1['message'] == "Hello from MyServer.server_property!"
+        assert data1['access_count'] == 1
+        
+        # Access second property
+        response2 = client.get("/property/another_property")
+        assert response2.status_code == RestCodes.OK.value
+        data2 = response2.get_json()['data']
+        assert data2['message'] == "Hello from MyServer.another_property!"
+        assert data2['value'] == "initial"
+        
+        # Access first property again and verify state is maintained independently
+        response3 = client.get("/property/server_property")
+        data3 = response3.get_json()['data']
+        assert data3['access_count'] == 2
+        
+        # Access second property again and verify it's unchanged
+        response4 = client.get("/property/another_property")
+        data4 = response4.get_json()['data']
+        assert data4['value'] == "initial"
+
 
 @pytest.mark.usefixtures("advanced_server")
 class TestAdvancedServer:
