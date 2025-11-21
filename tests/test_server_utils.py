@@ -237,6 +237,7 @@ class TestAdvancedServer:
         assert '/foo/test_static' in advanced_server._endpoint_map
         assert '/foo/test_class_method' in advanced_server._endpoint_map
 
+
 class TestLogging:
     """Tests for logging functionality including verbosity control and enter/exit tracing."""
 

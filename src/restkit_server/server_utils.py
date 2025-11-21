@@ -4,19 +4,16 @@ utilities for Flask applications
 """
 
 
-from enum import Enum
 import inspect
-import os
 import sys
 import traceback
-
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+from enum import Enum
 from functools import wraps
 
+from flask import Flask, jsonify, request
+from flask_cors import CORS
 
-from .logger import setup_logger, LoggerWriter, enter_exit_logger  # type: ignore
-
+from .logger import LoggerWriter, enter_exit_logger, setup_logger  # type: ignore
 
 
 class RestCodes(Enum):
@@ -265,7 +262,6 @@ class SimpleServer(metaclass=MetaSimpleServer):
         sys.stderr = LoggerWriter(self.logger, level=40)  # ERROR
         self.set_verbose(verbose)
 
-
         self.run = self.app.run
         if self.demo_mode:
             self.logger.info("Demo mode is on")
@@ -307,7 +303,6 @@ class SimpleServer(metaclass=MetaSimpleServer):
             for handler in self.logger.handlers:
                 handler.setLevel("INFO")
             self.logger.info("Verbose logging disabled.")
-
 
     def _register_endpoints(self):
         for route, func_name in self._endpoint_map.items():

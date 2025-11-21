@@ -6,26 +6,29 @@ setup_logger, enter_exit_logger decorator, and LoggerWriter.
 
 import logging
 import os
-import tempfile
 import shutil
-import pytest
+import tempfile
 import time
 
+import pytest
+
 from restkit_server.logger import (
-    TimedAndSizedRotatingFileHandler,
-    setup_logger,
-    enter_exit_logger,
+    LOGGERS,
     LoggerWriter,
-    LOGGERS
+    TimedAndSizedRotatingFileHandler,
+    enter_exit_logger,
+    setup_logger,
 )
 
 
 @pytest.fixture
 def test_dir():
     """Create a temporary directory for tests."""
+    # pylint: disable=import-outside-toplevel
+    import restkit_server.logger as logger_module
+
     temp_dir = tempfile.mkdtemp()
     # Reset globals
-    from restkit_server import logger as logger_module
     logger_module.MAIN_LOG_FILE = None
     LOGGERS.clear()
     
@@ -266,7 +269,7 @@ class TestSetupLogger:
         test_logger = setup_logger(
             "test_logger",
             directory_path=test_dir,
-            intervarl=7  # Note: parameter name has typo in source
+            interval=7  # Note: parameter name has typo in source
         )
         
         # Find file handler
@@ -298,7 +301,8 @@ class TestSetupLogger:
 
     def test_main_log_file_global_set(self, test_dir):
         """Test that MAIN_LOG_FILE global is set correctly."""
-        from restkit_server import logger as logger_module
+        # pylint: disable=import-outside-toplevel
+        import restkit_server.logger as logger_module
         
         setup_logger("test_logger", directory_path=test_dir)
         
@@ -385,8 +389,11 @@ class TestEnterExitLogger:
             setup_logger("test_logger", directory_path=test_dir)
             
             class TestClass:
+                """Test class for decorator."""
+
                 @enter_exit_logger('test_logger')
                 def test_method(self, arg1):
+                    """Test method."""
                     return arg1 * 2
             
             obj = TestClass()
