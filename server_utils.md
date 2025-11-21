@@ -2,6 +2,8 @@
 
 Documentation for `SimpleServer` and `AdvancedServer` from `restkit_server.server_utils`.
 
+> 🏠 [Back to README](README.md) | 📚 [Logger Utilities Guide](logger.md)
+
 ## Overview
 
 The module provides two Flask-based server helpers:
@@ -47,6 +49,8 @@ RestKit Server includes comprehensive logging:
 - **Console logging**: INFO level by default, DEBUG when `verbose=True`
 - **Enter/exit tracing**: When verbose, logs function entry/exit with arguments
 - **Unified logger**: All endpoints log to the same server logger
+
+> 📖 For detailed logging configuration, see [Logger Utilities Guide](logger.md)
 
 ```python
 # Enable verbose logging at initialization
