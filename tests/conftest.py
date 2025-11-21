@@ -6,7 +6,8 @@ import pytest
 @pytest.fixture(scope="function", autouse=True)
 def reset_logger_state():
     """Reset logger globals between all tests to avoid cross-contamination."""
-    from restkit_server import logger as logger_module
+    # pylint: disable=import-outside-toplevel
+    import restkit_server.logger as logger_module
     from restkit_server.logger import LOGGERS
     
     # Reset before test
@@ -23,6 +24,7 @@ def reset_logger_state():
                 handler.close()
                 logger_inst.removeHandler(handler)
             except Exception:
+                # cleanup best-effort only
                 pass
     
     LOGGERS.clear()

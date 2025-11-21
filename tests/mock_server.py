@@ -106,9 +106,16 @@ class Fizz:
 class MyAdvancedServer(AdvancedServer):
     """AdvancedServer subclass adding a custom /hello endpoint."""
 
-    def __init__(self, demo_mode: bool = False, unit_instances: dict | None = None, app_name: str = "MyAdvancedServerApp", verbose: bool = False) -> None:
+    def __init__(self,
+                 demo_mode: bool = False,
+                 unit_instances: dict | None = None,
+                 app_name: str = "MyAdvancedServerApp",
+                 verbose: bool = False) -> None:
         """Initialize with optional unit instances mapping for dynamic exposure."""
-        super().__init__(demo_mode=demo_mode, app_name=app_name, unit_instances=unit_instances, verbose=verbose)
+        super().__init__(demo_mode=demo_mode,
+                         app_name=app_name,
+                         unit_instances=unit_instances,
+                         verbose=verbose)
 
     def hello(self) -> dict:
         """Return a greeting specific to MyAdvancedServer."""

@@ -1,11 +1,10 @@
 """Common logging setup utilities."""
 
-from logging import getLogger, Logger, StreamHandler, Formatter
-from datetime import datetime, timezone
-from logging.handlers import TimedRotatingFileHandler
 import os
-
-# TODO: add a way to select the log size and number of files to keep
+from datetime import datetime, timezone
+from functools import wraps
+from logging import Formatter, Logger, StreamHandler, getLogger
+from logging.handlers import TimedRotatingFileHandler
 
 LOGGERS = {}
 MAIN_LOG_FILE = None
@@ -31,7 +30,7 @@ class TimedAndSizedRotatingFileHandler(TimedRotatingFileHandler):
             
         # Check size-based rollover
         if self.maxBytes > 0:
-            msg = "%s\n" % self.format(record)
+            msg = f"{self.format(record)}\n"
             self.stream.seek(0, 2)  # Seek to end
             if self.stream.tell() + len(msg) >= self.maxBytes:
                 return True
@@ -42,7 +41,7 @@ class TimedAndSizedRotatingFileHandler(TimedRotatingFileHandler):
 def setup_logger(name: str,
                  directory_path: str = 'log',
                  stream_log_level: str = 'INFO',
-                 intervarl: int = 1,
+                 interval: int = 1,
                  max_file_size: int | None = None,
                  max_backup_files: int | None = None) -> Logger:
     """
@@ -53,10 +52,10 @@ def setup_logger(name: str,
     :type name: str
     :param directory_path: the directory path for the log files, defaults to 'log'
     :type directory_path: str
-    :param stream_log_level: the log level for the stream handler, defaults to 'DEBUG'
+    :param stream_log_level: the log level for the stream handler, defaults to 'INFO'
     :type stream_log_level: str
-    :param intervarl: the interval in days for time-based log rotation, defaults to None
-    :type intervarl: int | None
+    :param interval: the interval in days for time-based log rotation, defaults to 1
+    :type interval: int 
     :param max_file_size: the maximum file size in bytes for size-based log rotation, defaults to None
     :type max_file_size: int | None
     :param max_backup_files: the maximum number of backup files to keep, defaults to None
@@ -82,12 +81,16 @@ def setup_logger(name: str,
     if max_file_size is None:
         # No size limit 
         max_file_size = 0
+    
+    if max_backup_files is None:
+        # Default to 0 - no backups
+        max_backup_files = 0
 
     LOGGERS[name] = new_logger
     formatter = Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
     file_handler = TimedAndSizedRotatingFileHandler(MAIN_LOG_FILE, 
-                                                    interval=intervarl,
+                                                    interval=interval,
                                                     maxBytes=max_file_size,
                                                     backupCount=max_backup_files)
     file_handler.name = 'file_handler'
@@ -111,8 +114,8 @@ def enter_exit_logger(logger):
     :return: the decorator
     :rtype: function
     """
-    from functools import wraps
     logger = getLogger(logger)
+
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
