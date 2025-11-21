@@ -18,9 +18,13 @@ pip install restkit-server
 
 - SimpleServer - Automatically maps class methods to REST endpoints
 - AdvancedServer - Extends SimpleServer with dynamic unit method exposure
-- Built-in logging and error handling
+- Built-in logging and error handling with advanced rotation
 - JSON response formatting
 - CORS support
+
+> 📚 **Detailed Documentation:**
+> - [Server Utilities Guide](server_utils.md) - Complete server implementation details
+> - [Logger Utilities Guide](logger.md) - Advanced logging features and configuration
 
 ## Quick Start
 
@@ -85,6 +89,14 @@ server = MyServer(verbose=True)  # Enables DEBUG logging
 server.set_verbose(False)  # Dynamically change log level
 ```
 
+**Features:**
+- Dual rotation (time and size-based)
+- Function entry/exit tracing decorator
+- Stream redirection support
+- Configurable log levels and retention
+
+> 📖 See [Logger Utilities Guide](logger.md) for detailed logging configuration and examples.
+
 ## API Reference
 
 ### SimpleServer
@@ -94,6 +106,8 @@ Automatically exposes public methods as REST endpoints:
 - Supports both GET and POST requests by default
 - Automatic JSON parameter extraction
 - Built-in error handling
+
+> 📖 See [Server Utilities Guide](server_utils.md) for complete API documentation.
 
 ### AdvancedServer
 
@@ -173,13 +187,11 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - **Discussions**: [GitHub Discussions](https://github.com/Politech-tech/restkit-server/discussions)
 - **Email**: ido.shafrir@gmail.com
 
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for release history.
-
 ## Documentation
 
-See the [full documentation](server_utils.md) for detailed usage instructions.
+- [Server Utilities Guide](server_utils.md) - Detailed server implementation and API reference
+- [Logger Utilities Guide](logger.md) - Advanced logging configuration and usage
+- [Changelog](CHANGELOG.md) - Release history and version information
 
 ## License
 
