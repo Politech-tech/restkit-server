@@ -53,3 +53,8 @@ logs/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# testing artifacts 
+htmlcov/
+.coverage
+.coveragerc
