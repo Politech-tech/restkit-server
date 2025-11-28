@@ -99,6 +99,7 @@ def setup_logger(name: str,
     new_logger.addHandler(file_handler)
 
     stream_handler = StreamHandler()
+    stream_handler.name = 'stream_handler'
     stream_handler.setLevel(stream_log_level)
     stream_handler.setFormatter(formatter)
     new_logger.addHandler(stream_handler)
