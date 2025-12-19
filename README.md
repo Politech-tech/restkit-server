@@ -21,6 +21,7 @@ pip install restkit-server
 - Built-in logging and error handling with advanced rotation
 - JSON response formatting
 - CORS support
+- Case-insensitive URL routing (e.g., `/HelloWorld` redirects to `/helloworld`)
 
 > 📚 **Detailed Documentation:**
 > - [Server Utilities Guide](server_utils.md) - Complete server implementation details
