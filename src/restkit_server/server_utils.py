@@ -10,7 +10,7 @@ import traceback
 from enum import Enum
 from functools import wraps
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, redirect
 from flask_cors import CORS
 
 from .logger import LoggerWriter, enter_exit_logger, setup_logger  # type: ignore
@@ -115,7 +115,12 @@ class MetaSimpleServer(type):
                 # Use the class name as logger name for unified logging
                 new_method = mcs._wrap_endpoint(value, logger_name=name)
                 setattr(new_instance, key, new_method)
-                new_instance._endpoint_map[f'/{key}'] = key
+                
+                path = f'/{key}'.lower()
+
+                if path in new_instance._endpoint_map:
+                    raise ValueError(f"Endpoint path conflict: {path} is already registered. remember that endpoint paths are case-insensitive.")
+                new_instance._endpoint_map[path] = key
 
         for property_name, property_obj in inspect.getmembers(new_instance, predicate=lambda x: isinstance(x, property)):
             if not property_name.startswith("_"):
@@ -132,7 +137,10 @@ class MetaSimpleServer(type):
                 wrapped_getter.__name__ = f'_property_getter_{property_name}'
                 
                 setattr(new_instance, f'_property_getter_{property_name}', wrapped_getter)
-                new_instance._endpoint_map[f'/property/{property_name}'] = f'_property_getter_{property_name}'
+                path = f'/property/{property_name}'.lower()
+                if path in new_instance._endpoint_map:
+                    raise ValueError(f"Endpoint path conflict: {path} is already registered. remember that endpoint paths are case-insensitive.")
+                new_instance._endpoint_map[path] = f'_property_getter_{property_name}'
 
         return new_instance
         
@@ -250,6 +258,20 @@ class SimpleServer(metaclass=MetaSimpleServer):
         self.logger_name = app_name
         self.app = Flask(app_name)
         CORS(self.app)
+        
+        # Add case-insensitive routing
+        @self.app.before_request
+        def normalize_url():
+            """Normalize URL paths to lowercase for case-insensitive routing."""
+            if request.path != request.path.lower():
+                
+                # Preserve query string if present
+                if request.query_string:
+                    new_url = request.path.lower() + '?' + request.query_string.decode('utf-8')
+                else:
+                    new_url = request.path.lower()
+                return redirect(new_url, code=308)
+            return None
         
         # setup logger
         self.logger = setup_logger(self.__class__.__name__)
