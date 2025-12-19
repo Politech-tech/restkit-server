@@ -24,6 +24,7 @@ Both servers return JSON responses via the `RestResponse` helper. Methods may re
 - Enter/exit tracing for all endpoint calls (when verbose=True)
 - Support for custom HTTP methods per endpoint
 - CORS enabled by default
+- **Case-insensitive URL routing** - URLs are automatically normalized to lowercase
 
 ### Constructor Parameters
 
@@ -188,6 +189,27 @@ class MyServer(SimpleServer):
 Certain methods are automatically excluded from endpoint registration:
 - Methods starting with `_` (private methods)
 - `set_verbose` (utility method for logging control)
+
+### Case-Insensitive Routing
+
+All endpoints are case-insensitive. URLs are automatically normalized to lowercase:
+
+```bash
+# All of these work and redirect to /hello_world
+curl http://localhost:5000/HELLO_WORLD
+curl http://localhost:5000/Hello_World
+curl http://localhost:5000/hello_world  # Direct access (no redirect)
+
+# Query parameters are preserved during redirect
+curl http://localhost:5000/GET_USER?user_id=123
+# Redirects to: /get_user?user_id=123
+```
+
+**Implementation Details:**
+- Non-lowercase URLs receive a 308 Permanent Redirect to the lowercase version
+- Query parameters are preserved during the redirect
+- The redirect uses HTTP 308 (Permanent Redirect) for proper caching
+- Applies to all endpoints including unit methods in AdvancedServer
 
 ### Dynamic Method Assignment (AdvancedServer)
 

@@ -11,7 +11,7 @@ This module validates:
 import pytest
 import logging
 from .mock_server import MyServer, MyAdvancedServer, Fizz, Foo
-from restkit_server import RestCodes
+from restkit_server import RestCodes, SimpleServer
 
 
 @pytest.fixture()
@@ -412,3 +412,155 @@ class TestLogging:
         
         # The enter log should mention kwargs
         assert any("kwargs" in msg for msg in enter_logs)
+
+
+@pytest.mark.usefixtures("simple_server")
+class TestCaseInsensitiveRouting:
+    """Tests for case-insensitive URL routing functionality."""
+
+    def test_uppercase_endpoint(self, simple_server):
+        """Verify uppercase URL redirects to lowercase endpoint with 308 status."""
+        client = simple_server.app.test_client()
+        response = client.get("/HELLO_WORLD")
+        assert response.status_code == 308  # Permanent Redirect
+        assert response.location == "/hello_world"
+
+    def test_mixed_case_endpoint(self, simple_server):
+        """Verify mixed case URL redirects to lowercase endpoint."""
+        client = simple_server.app.test_client()
+        response = client.get("/Hello_World")
+        assert response.status_code == 308
+        assert response.location == "/hello_world"
+
+    def test_lowercase_endpoint_works(self, simple_server):
+        """Verify lowercase URL works normally without redirect."""
+        client = simple_server.app.test_client()
+        response = client.get("/hello_world")
+        assert response.status_code == RestCodes.OK.value
+        assert response.get_json()['data'] == {"message": "Hello, world!"}
+
+    def test_case_insensitive_with_query_params(self, simple_server):
+        """Verify query parameters are preserved during case-insensitive redirect."""
+        client = simple_server.app.test_client()
+        response = client.get("/HELLO_WORLD?param1=value1&param2=value2")
+        assert response.status_code == 308
+        assert "param1=value1" in response.location
+        assert "param2=value2" in response.location
+        assert response.location.startswith("/hello_world?")
+
+    def test_case_insensitive_post_endpoint(self, simple_server):
+        """Verify POST requests are also case-insensitive."""
+        client = simple_server.app.test_client()
+        response = client.post("/POST_EXAMPLE", json={'var1': 'test', 'var2': 'value'})
+        assert response.status_code == 308
+        assert response.location == "/post_example"
+
+    def test_case_insensitive_index(self, simple_server):
+        """Verify root index endpoint is case-insensitive."""
+        client = simple_server.app.test_client()
+        response = client.get("/INDEX")
+        assert response.status_code == 308
+        assert response.location == "/index"
+
+    def test_follow_redirect_uppercase(self, simple_server):
+        """Verify following redirect from uppercase URL returns correct response."""
+        client = simple_server.app.test_client()
+        response = client.get("/HELLO_WORLD", follow_redirects=True)
+        assert response.status_code == RestCodes.OK.value
+        assert response.get_json()['data'] == {"message": "Hello, world!"}
+
+
+@pytest.mark.usefixtures("advanced_server")
+class TestCaseInsensitiveAdvancedServer:
+    """Tests for case-insensitive routing in AdvancedServer with unit instances."""
+
+    def test_unit_endpoint_uppercase(self, advanced_server):
+        """Verify unit instance endpoints are case-insensitive."""
+        client = advanced_server.app.test_client()
+        response = client.get("/FOO/BAR")
+        assert response.status_code == 308
+        assert response.location == "/foo/bar"
+
+    def test_unit_endpoint_mixed_case(self, advanced_server):
+        """Verify mixed case unit endpoints redirect correctly."""
+        client = advanced_server.app.test_client()
+        response = client.get("/Foo/Bar")
+        assert response.status_code == 308
+        assert response.location == "/foo/bar"
+
+    def test_unit_endpoint_follow_redirect(self, advanced_server):
+        """Verify following redirect on unit endpoint returns correct response."""
+        client = advanced_server.app.test_client()
+        response = client.get("/FOO/BAR", follow_redirects=True)
+        assert response.status_code == RestCodes.OK.value
+        assert response.get_json()['data'] == {"message": "Hello from Foo.bar!"}
+
+    def test_unit_property_endpoint_case_insensitive(self, advanced_server):
+        """Verify unit property endpoints are case-insensitive."""
+        client = advanced_server.app.test_client()
+        response = client.get("/FOO/PROPERTY/TEST_PROPERTY")
+        assert response.status_code == 308
+        assert response.location == "/foo/property/test_property"
+
+
+class TestEndpointPathConflicts:
+    """Tests for endpoint path conflict detection with case-insensitive routing."""
+
+    def test_method_name_conflict_raises_error(self):
+        """Verify that methods with names that conflict when lowercased raise ValueError."""
+        with pytest.raises(ValueError, match="Endpoint path conflict.*already registered.*case-insensitive"):
+            class ConflictingServer(SimpleServer):  # pylint: disable=C0115
+                def hello_world(self):  # pylint: disable=C0116
+                    return {"message": "First method"}
+                
+                def Hello_World(self):  # pylint: disable=C0116  # Conflicts with hello_world when lowercased
+                    return {"message": "Second method"}
+
+    def test_property_name_conflict_raises_error(self):
+        """Verify that properties with names that conflict when lowercased raise ValueError."""
+        with pytest.raises(ValueError, match="Endpoint path conflict.*already registered.*case-insensitive"):
+            class ConflictingPropertiesServer(SimpleServer):  # pylint: disable=C0115
+                @property
+                def my_property(self):  # pylint: disable=C0116
+                    return {"value": "First"}
+                
+                @property
+                def My_Property(self):  # pylint: disable=C0116  # Conflicts with my_property when lowercased
+                    return {"value": "Second"}
+
+    def test_method_and_property_same_name_no_conflict(self):
+        """Verify that method 'property_X' and property 'X' don't conflict (different paths)."""
+        # Property endpoints are /property/{name}, method endpoints are /{name}
+        # So 'property_myname' method -> /property_myname
+        # and 'myname' property -> /property/myname
+        # These are different paths and should NOT conflict
+        class MethodPropertyDifferentServer(SimpleServer):  # pylint: disable=C0115
+            @property
+            def myname(self):  # pylint: disable=C0116
+                return {"value": "Property value"}
+            
+            def property_myname(self):  # pylint: disable=C0116
+                return {"value": "Method value"}
+        
+        server = MethodPropertyDifferentServer(demo_mode=False)
+        assert '/property_myname' in server._endpoint_map  # pylint: disable=E1101  # method endpoint
+        assert '/property/myname' in server._endpoint_map  # pylint: disable=E1101  # property endpoint
+
+    def test_no_conflict_with_different_names(self):
+        """Verify that methods with different names (even similar) don't conflict."""
+        # This should NOT raise an error
+        class NoConflictServer(SimpleServer):  # pylint: disable=C0115
+            def hello_world(self):  # pylint: disable=C0116
+                return {"message": "Hello"}
+            
+            def hello_world2(self):  # pylint: disable=C0116
+                return {"message": "Hello 2"}
+            
+            @property
+            def some_property(self):  # pylint: disable=C0116
+                return {"value": "Property"}
+        
+        server = NoConflictServer(demo_mode=False)
+        assert '/hello_world' in server._endpoint_map  # pylint: disable=E1101
+        assert '/hello_world2' in server._endpoint_map  # pylint: disable=E1101
+        assert '/property/some_property' in server._endpoint_map  # pylint: disable=E1101
