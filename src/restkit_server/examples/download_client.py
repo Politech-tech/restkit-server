@@ -1,13 +1,14 @@
-"""Example client demonstrating how to download files from a RestKit server.
+"""Example client demonstrating file transfer with a RestKit server.
 
 This module provides examples of:
  - Downloading files via query parameters
  - Downloading files via JSON body
- - Error handling for download operations
+ - Uploading files to the server
+ - Error handling for file transfer operations
  - Streaming large file downloads
 
 Usage:
-    First, start a server with download capability:
+    First, start a server with file transfer capability:
         python -m restkit_server.examples.demo_server
 
     Then run this client:
@@ -134,45 +135,160 @@ def download_streaming(base_url: str, file_path: str, output_path: str, chunk_si
         return False
 
 
+def upload_file(base_url: str, file_path: str, custom_filename: str = None) -> bool:
+    """
+    Upload a file to the server.
+
+    :param base_url: The base URL of the server (e.g., 'http://localhost:5001')
+    :param file_path: The local path to the file to upload
+    :param custom_filename: Optional custom filename to use on the server
+    :return: True if upload was successful, False otherwise
+    """
+    if not os.path.isfile(file_path):
+        print(f"❌ File not found: {file_path}")
+        return False
+
+    try:
+        with open(file_path, 'rb') as f:
+            files = {'file': f}
+            data = {}
+            if custom_filename:
+                data['filename'] = custom_filename
+
+            response = requests.post(
+                f"{base_url}/upload",
+                files=files,
+                data=data if data else None,
+                timeout=60
+            )
+
+        if response.status_code == 201:
+            result = response.json()
+            filename = result.get('data', {}).get('filename', 'unknown')
+            size = result.get('data', {}).get('size', 0)
+            print(f"✅ File uploaded successfully: {filename} ({size} bytes)")
+            return True
+
+        error_data = response.json()
+        print(f"❌ Upload failed: {error_data.get('data', {}).get('error', 'Unknown error')}")
+        return False
+
+    except requests.exceptions.ConnectionError:
+        print(f"❌ Could not connect to server at {base_url}")
+        return False
+    except requests.exceptions.Timeout:
+        print("❌ Request timed out")
+        return False
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Request error: {e}")
+        return False
+
+
+def upload_bytes(base_url: str, content: bytes, filename: str) -> bool:
+    """
+    Upload bytes content to the server.
+
+    :param base_url: The base URL of the server (e.g., 'http://localhost:5001')
+    :param content: The bytes content to upload
+    :param filename: The filename to use on the server
+    :return: True if upload was successful, False otherwise
+    """
+    try:
+        import io
+        files = {'file': (filename, io.BytesIO(content))}
+
+        response = requests.post(
+            f"{base_url}/upload",
+            files=files,
+            timeout=60
+        )
+
+        if response.status_code == 201:
+            result = response.json()
+            size = result.get('data', {}).get('size', 0)
+            print(f"✅ Content uploaded successfully: {filename} ({size} bytes)")
+            return True
+
+        error_data = response.json()
+        print(f"❌ Upload failed: {error_data.get('data', {}).get('error', 'Unknown error')}")
+        return False
+
+    except requests.exceptions.ConnectionError:
+        print(f"❌ Could not connect to server at {base_url}")
+        return False
+    except requests.exceptions.Timeout:
+        print("❌ Request timed out")
+        return False
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Request error: {e}")
+        return False
+
+
 def main():
-    """Demonstrate download functionality."""
+    """Demonstrate file transfer functionality."""
     base_url = "http://localhost:5001"
 
     # Check command line arguments for file path
     if len(sys.argv) > 1:
-        file_to_download = sys.argv[1]
+        file_to_transfer = sys.argv[1]
     else:
-        # Default: try to download this script itself as a demo
-        file_to_download = os.path.abspath(__file__)
+        # Default: use this script itself as a demo
+        file_to_transfer = os.path.abspath(__file__)
 
     output_dir = os.path.join(os.path.dirname(__file__), "downloads")
     os.makedirs(output_dir, exist_ok=True)
 
     print("=" * 60)
-    print("RestKit Download Client Example")
+    print("RestKit File Transfer Client Example")
     print("=" * 60)
     print(f"\nServer URL: {base_url}")
-    print(f"File to download: {file_to_download}")
+    print(f"File to transfer: {file_to_transfer}")
     print(f"Output directory: {output_dir}\n")
 
-    # Example 1: Download via query parameter
-    print("1️⃣  Downloading via query parameter...")
+    # ===== UPLOAD EXAMPLES =====
+    print("📤 UPLOAD EXAMPLES")
+    print("-" * 40)
+
+    # Example 1: Upload a file
+    print("1️⃣  Uploading file...")
+    upload_file(base_url, file_to_transfer)
+
+    print()
+
+    # Example 2: Upload with custom filename
+    print("2️⃣  Uploading file with custom filename...")
+    upload_file(base_url, file_to_transfer, custom_filename="my_custom_file.py")
+
+    print()
+
+    # Example 3: Upload bytes content
+    print("3️⃣  Uploading bytes content...")
+    upload_bytes(base_url, b"Hello, this is test content!", "test_content.txt")
+
+    print()
+
+    # ===== DOWNLOAD EXAMPLES =====
+    print("📥 DOWNLOAD EXAMPLES")
+    print("-" * 40)
+
+    # Example 4: Download via query parameter
+    print("4️⃣  Downloading via query parameter...")
     output_file = os.path.join(output_dir, "downloaded_via_query.txt")
-    download_via_query_param(base_url, file_to_download, output_file)
+    download_via_query_param(base_url, file_to_transfer, output_file)
 
     print()
 
-    # Example 2: Download via JSON body
-    print("2️⃣  Downloading via JSON body...")
+    # Example 5: Download via JSON body
+    print("5️⃣  Downloading via JSON body...")
     output_file = os.path.join(output_dir, "downloaded_via_json.txt")
-    download_via_json_body(base_url, file_to_download, output_file)
+    download_via_json_body(base_url, file_to_transfer, output_file)
 
     print()
 
-    # Example 3: Streaming download (for large files)
-    print("3️⃣  Downloading via streaming (memory-efficient for large files)...")
+    # Example 6: Streaming download (for large files)
+    print("6️⃣  Downloading via streaming (memory-efficient for large files)...")
     output_file = os.path.join(output_dir, "downloaded_via_stream.txt")
-    download_streaming(base_url, file_to_download, output_file)
+    download_streaming(base_url, file_to_transfer, output_file)
 
     print("\n" + "=" * 60)
     print("Done!")
