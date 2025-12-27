@@ -200,6 +200,76 @@ if __name__ == '__main__':
 
 > ⚠️ **Security Note:** Always configure `UPLOAD_BLOCKED_PATTERNS` in production to prevent uploading of executable or dangerous files. Consider also setting `MAX_CONTENT_LENGTH` to limit upload sizes.
 
+### Built-in Log Viewer
+
+SimpleServer provides built-in endpoints for viewing and listing log files.
+
+**Endpoints:**
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/list_logs` | GET | Returns a JSON list of all log files in the logging directory |
+| `/logs` | GET | Returns the current log file content as plain text |
+| `/logs/<filename>` | GET | Returns a specific log file content |
+| `/logs?log_file=<filename>` | GET | Alternative way to request a specific log file |
+
+**Usage Examples:**
+
+```bash
+# List all available log files
+curl http://localhost:5000/list_logs
+
+# View the current (active) log file
+curl http://localhost:5000/logs
+
+# View a specific log file by path
+curl http://localhost:5000/logs/myserver_2025-12-27_14_30.log
+
+# View a specific log file by query parameter
+curl "http://localhost:5000/logs?log_file=myserver_2025-12-27_14_30.log"
+```
+
+**Python Example:**
+
+```python
+import requests
+
+# List available log files
+response = requests.get("http://localhost:5000/list_logs")
+if response.status_code == 200:
+    logs = response.json()['data']
+    print(f"Available logs: {logs}")
+
+# Get the current log content
+response = requests.get("http://localhost:5000/logs")
+if response.status_code == 200:
+    log_content = response.text
+    print(log_content)
+
+# Get a specific log file
+response = requests.get(
+    "http://localhost:5000/logs",
+    params={"log_file": "myserver_2025-12-27_14_30.log"}
+)
+if response.status_code == 200:
+    print(response.text)
+```
+
+**Security Features:**
+
+- **Path Traversal Protection**: Log file requests are validated to ensure they remain within the logging directory.
+- **Case-insensitive Filenames**: Due to URL normalization, filenames are matched case-insensitively.
+- **Directory Restriction**: Only files within the server's logging directory can be accessed.
+
+**Response Formats:**
+
+- `/list_logs` returns JSON: `{"status": "OK", "data": ["file1.log", "file2.log"], "code": 200}`
+- `/logs` and `/logs/<filename>` return plain text with `Content-Type: text/plain`
+
+> 🌐 **Browser Viewable:** The `/logs` and `/logs/<filename>` endpoints return plain text and are directly viewable in a web browser. Simply navigate to `http://localhost:5000/logs` to view the current log file in your browser.
+
+> 💡 **Tip:** The log viewer is useful for debugging in development or viewing logs from a web dashboard. In production, consider restricting access to these endpoints using authentication middleware.
+
 ### Logging
 
 RestKit Server includes comprehensive logging:

@@ -307,6 +307,11 @@ class SimpleServer(metaclass=MetaSimpleServer):
         if self.custom_flask_configs:
             self.logger.debug(f"Applied custom Flask configurations: {self.custom_flask_configs}")
 
+        handlers = {h.name: h for h in self.logger.handlers}
+        self._logging_path = handlers['file_handler'].baseFilename
+        self._logging_dir = os.path.dirname(self._logging_path)
+        self._logging_dir = os.path.abspath(self._logging_dir)
+
         self.run = self.app.run
         if self.demo_mode:
             self.logger.info("Demo mode is on")
@@ -324,6 +329,10 @@ class SimpleServer(metaclass=MetaSimpleServer):
         # add upload endpoint
         logger_decorated_upload = enter_exit_logger(self.logger_name)(self._upload)
         self.app.route('/upload', methods=['POST'])(logger_decorated_upload)
+
+        # add log viewer endpoint
+        self.app.route('/logs', methods=['GET'])(self._log_viewer)
+        self.app.route('/logs/<path:log_file>', methods=['GET'])(self._log_viewer)
 
     @property
     def verbose(self) -> bool:
@@ -572,6 +581,56 @@ class SimpleServer(metaclass=MetaSimpleServer):
             trace = traceback.format_exc()
             self.logger.debug(trace)
             self.logger.error(f"Error saving file {filename}: {str(e)}")
+            return RestResponse.create({"error": str(e)}, RestCodes.INTERNAL_SERVER_ERROR)
+
+    def list_logs(self) -> list:
+        """
+        returns a list with all log files in the logging directory
+        """
+        _, _, files = next(os.walk(self._logging_dir))
+        logs = [f for f in files if '.log' in f.lower()]
+        return logs
+
+    def _log_viewer(self, log_file: str | None = None) -> Response:
+        """
+        entpoint to view log from browser
+
+        if no log file is specified, the current log file will be shown
+
+        :param log_file: the log file to view (optional)
+        the parameter can be provided as a query parameter: /log_viewer?log_file=filename.log
+        or as  the url path: /logs/filename.log
+        """
+        if not log_file:
+            log_file = request.args.get('log_file', None)
+
+        if not log_file:
+            log_file = os.path.basename(self._logging_path)
+
+        # case-insensitive filename lookup (URL may be lowercased by routing)
+        actual_files = os.listdir(self._logging_dir)
+        matched_file = None
+        for f in actual_files:
+            if f.lower() == log_file.lower():
+                matched_file = f
+                break
+
+        if not matched_file:
+            return RestResponse.create({"error": "Log file not found"}, RestCodes.NOT_FOUND)
+
+        log_path = os.path.join(self._logging_dir, matched_file)
+        log_path = os.path.realpath(log_path)
+
+        # ensure the log file is within the logging directory
+        if not log_path.startswith(self._logging_dir) or not os.path.isfile(log_path):
+            return RestResponse.create({"error": "Log file not found"}, RestCodes.NOT_FOUND)
+
+        try:
+            with open(log_path, 'r', encoding='utf-8') as f:
+                log_content = f.read()
+            return Response(log_content, mimetype='text/plain')
+        except Exception as e:
+            self.logger.error(f"Error reading log file {log_file}: {str(e)}")
             return RestResponse.create({"error": str(e)}, RestCodes.INTERNAL_SERVER_ERROR)
 
 
