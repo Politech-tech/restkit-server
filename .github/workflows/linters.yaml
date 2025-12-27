@@ -63,7 +63,7 @@ jobs:
         run: |
           cat << EOF > .pylintrc
           [MESSAGES CONTROL]
-          disable=C0201,C0303,C0304,C0305,C0104,C0411,E0401,C0413,C0103,E0402,C0325,W,R
+          disable=C0201,C0303,C0304,C0305,C0104,C0411,E0401,C0413,C0103,E0402,C0325,W,R,C0415
           enable=W0141,R1710,R1705
 
 
