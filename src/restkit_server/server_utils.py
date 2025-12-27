@@ -6,11 +6,12 @@ utilities for Flask applications
 
 import inspect
 import sys
+import os 
 import traceback
 from enum import Enum
 from functools import wraps
 
-from flask import Flask, jsonify, request, redirect, send_file
+from flask import Flask, Response, jsonify, request, redirect, send_file
 from flask_cors import CORS
 
 from .logger import LoggerWriter, enter_exit_logger, setup_logger  # type: ignore
@@ -301,7 +302,7 @@ class SimpleServer(metaclass=MetaSimpleServer):
         sys.stdout = LoggerWriter(self.logger, level=20)  # INFO
         sys.stderr = LoggerWriter(self.logger, level=40)  # ERROR
         self.set_verbose(verbose)
-        
+
         if self.custom_flask_configs:
             self.logger.debug(f"Applied custom Flask configurations: {self.custom_flask_configs}")
 
@@ -315,6 +316,10 @@ class SimpleServer(metaclass=MetaSimpleServer):
 
         self._register_endpoints()
 
+        # add download endpoint
+        logger_decorated_download = enter_exit_logger(self.logger_name)(self._download)
+        self.app.route('/download', methods=['GET'])(logger_decorated_download)
+        
     @property
     def verbose(self) -> bool:
         """
@@ -346,6 +351,7 @@ class SimpleServer(metaclass=MetaSimpleServer):
             for handler in self.logger.handlers:
                 handler.setLevel("INFO")
             self.logger.info("Verbose logging disabled.")
+
 
     def _register_endpoints(self):
         for route, func_name in self._endpoint_map.items():
@@ -379,6 +385,81 @@ class SimpleServer(metaclass=MetaSimpleServer):
             return {"message": "Server is running in demo mode", "run_mode": "demo"}
         return {"message": "Server is running in production mode", "run_mode": "production"}
 
+    def _download(self) -> Response:
+        """
+        Download a file from the server.
+
+        The file path can be provided as:
+        - A query parameter: GET /download?path=/path/to/file
+        - A JSON body parameter: {"path": "/path/to/file"}
+
+        Security Features:
+        - Path traversal protection: Paths are normalized to prevent directory traversal attacks.
+        - Blocked paths: Configure BLOCKED_DOWNLOAD_PATHS in custom_flask_configs to block specific paths.
+        - Allowed paths (whitelist): Configure ALLOWED_DOWNLOAD_PATHS in custom_flask_configs to restrict 
+          downloads to specific directories. If set, only files within these directories can be downloaded.
+
+        :return: The file as an attachment, or an error response.
+        :rtype: Response
+        """
+        # get path from url query parameter
+        file_path = request.args.get('path', None)
+
+        # if not in query parameter, get from json body
+        if not file_path and request.is_json:
+            try:
+                input_data = request.get_json()
+                file_path = input_data.get('path', None)
+            except Exception:
+                file_path = None
+
+        # validate file path parameter
+        if not file_path:
+            return RestResponse.create({"error": "No file path provided"}, RestCodes.BAD_REQUEST)
+
+        # normalize path to prevent directory traversal attacks (e.g., ../../etc/passwd)
+        file_path = os.path.realpath(file_path)
+
+        # check for allowed paths (whitelist) - if configured, file must be within one of these directories
+        allowed_paths = self.app.config.get('ALLOWED_DOWNLOAD_PATHS', [])
+        if allowed_paths:
+            is_allowed = any(
+                file_path.startswith(os.path.realpath(allowed_path))
+                for allowed_path in allowed_paths
+            )
+            if not is_allowed:
+                return RestResponse.create(
+                    {"error": "Access to the specified file path is not allowed"},
+                    RestCodes.FORBIDDEN
+                )
+
+        # check for blocked paths (blacklist)
+        blocked_paths = self.app.config.get('BLOCKED_DOWNLOAD_PATHS', [])
+        if blocked_paths:
+            is_blocked = any(
+                file_path.startswith(os.path.realpath(blocked_path))
+                for blocked_path in blocked_paths
+            )
+            if is_blocked:
+                return RestResponse.create(
+                    {"error": "Access to the specified file path is blocked"},
+                    RestCodes.FORBIDDEN
+                )
+
+        # check if file exists
+        if not os.path.isfile(file_path):
+            return RestResponse.create({"error": f"File not found: {file_path}"}, RestCodes.NOT_FOUND)
+
+        base_name = os.path.basename(file_path)
+        try:
+            return send_file(file_path, as_attachment=True, download_name=base_name)
+        except Exception as e:
+            trace = traceback.format_exc()
+            self.logger.debug(trace)
+            self.logger.error(f"Error sending file {file_path}: {str(e)}")
+            return RestResponse.create({"error": str(e)}, RestCodes.INTERNAL_SERVER_ERROR)
+            
+        
 
 class AdvancedServer(SimpleServer):
     """

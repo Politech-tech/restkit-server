@@ -43,6 +43,77 @@ SimpleServer(demo_mode=False, app_name="simple_server", verbose=False)
 - **`index()`** — Built-in endpoint that lists all available routes (accessible at `/` and `/index`)
 - **`get_run_mode()`** — Returns whether server is in demo or production mode
 
+### Built-in Download Endpoint
+
+SimpleServer provides a built-in `/download` endpoint for serving files securely.
+
+**Usage:**
+
+```bash
+# Download via query parameter
+curl "http://localhost:5000/download?path=/path/to/file.txt" --output file.txt
+
+# Download via JSON body
+curl -X GET -H "Content-Type: application/json" \
+  -d '{"path": "/path/to/file.txt"}' \
+  http://localhost:5000/download --output file.txt
+```
+
+**Python Example:**
+
+```python
+import requests
+
+# Download via query parameter
+response = requests.get(
+    "http://localhost:5000/download",
+    params={"path": "/path/to/file.txt"}
+)
+
+if response.status_code == 200:
+    with open("downloaded_file.txt", "wb") as f:
+        f.write(response.content)
+    print("File downloaded successfully!")
+else:
+    print(f"Error: {response.json()}")
+
+# Download via JSON body
+response = requests.get(
+    "http://localhost:5000/download",
+    json={"path": "/path/to/file.txt"}
+)
+
+if response.status_code == 200:
+    with open("downloaded_file.txt", "wb") as f:
+        f.write(response.content)
+```
+
+**Security Features:**
+
+- **Path Traversal Protection**: All paths are normalized using `os.path.realpath()` to prevent directory traversal attacks (e.g., `../../etc/passwd`).
+- **Allowed Paths (Whitelist)**: Configure `ALLOWED_DOWNLOAD_PATHS` to restrict downloads to specific directories.
+- **Blocked Paths (Blacklist)**: Configure `BLOCKED_DOWNLOAD_PATHS` to block specific paths/directories.
+
+**Configuration Example:**
+
+```python
+from restkit_server import SimpleServer
+
+class SecureServer(SimpleServer):
+    custom_flask_configs = {
+        # Only allow downloads from these directories
+        'ALLOWED_DOWNLOAD_PATHS': ['/var/www/files', '/home/user/public'],
+        # Block specific sensitive paths (used if ALLOWED_DOWNLOAD_PATHS is not set)
+        'BLOCKED_DOWNLOAD_PATHS': ['/etc', '/var/log', 'C:\\Windows']
+    }
+
+if __name__ == '__main__':
+    server = SecureServer()
+    server.run(host='0.0.0.0', port=5000)
+```
+
+> ⚠️ **Security Note:** It's recommended to use `ALLOWED_DOWNLOAD_PATHS` (whitelist) over `BLOCKED_DOWNLOAD_PATHS` (blacklist) for better security. If `ALLOWED_DOWNLOAD_PATHS` is configured, files can only be downloaded from within those directories.
+
 ### Logging
 
 RestKit Server includes comprehensive logging:
