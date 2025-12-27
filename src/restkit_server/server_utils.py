@@ -523,8 +523,12 @@ class SimpleServer(metaclass=MetaSimpleServer):
 
         # sanitize filename to prevent path traversal
         # remove any directory components and dangerous characters
+        # normalize backslashes to forward slashes first (for cross-platform compatibility)
         original_filename = filename
-        filename = os.path.basename(filename)
+        filename = filename.replace('\\', '/')
+        # use split to handle both Windows and Linux path separators
+        filename = filename.split('/')[-1]
+        # remove any remaining dangerous characters
         filename = filename.replace('\\', '').replace('/', '')
 
         if original_filename != filename:
