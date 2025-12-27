@@ -25,6 +25,7 @@ Both servers return JSON responses via the `RestResponse` helper. Methods may re
 - Support for custom HTTP methods per endpoint
 - CORS enabled by default
 - **Case-insensitive URL routing** - URLs are automatically normalized to lowercase
+- **Custom Flask configuration** - Apply Flask app.config settings via class variable
 
 ### Constructor Parameters
 
@@ -61,6 +62,47 @@ server = MyServer(verbose=True)
 server.set_verbose(False)  # Switch to INFO level
 server.set_verbose(True)   # Switch to DEBUG level
 ```
+
+### Custom Flask Configuration
+
+You can customize Flask's application settings by defining the `custom_flask_configs` class variable in your `SimpleServer` subclass. This dictionary is applied to `app.config` during initialization.
+
+**Common Flask Configuration Options:**
+
+- `MAX_CONTENT_LENGTH` - Maximum allowed payload size (in bytes)
+- `JSON_SORT_KEYS` - Whether to sort JSON keys (default: True)
+- `SEND_FILE_MAX_AGE_DEFAULT` - Cache timeout for static files (in seconds)
+- `SECRET_KEY` - Secret key for session management
+- `SESSION_COOKIE_SECURE` - Restrict cookies to HTTPS only
+- `PREFERRED_URL_SCHEME` - URL scheme to use ('http' or 'https')
+
+**Example:**
+
+```python
+from restkit_server import SimpleServer
+
+class MyServer(SimpleServer):
+    # Define custom Flask configurations
+    custom_flask_configs = {
+        'MAX_CONTENT_LENGTH': 16 * 1024 * 1024,  # 16MB max upload size
+        'JSON_SORT_KEYS': False,  # Preserve JSON key order
+        'SEND_FILE_MAX_AGE_DEFAULT': 0,  # Disable caching for development
+        'SECRET_KEY': 'your-secret-key-here'  # For session management
+    }
+    
+    def __init__(self):
+        super().__init__(app_name='MyConfiguredServer')
+    
+    def upload_file(self, file_data: str) -> dict:
+        """Example endpoint that benefits from MAX_CONTENT_LENGTH config."""
+        return {"message": "File uploaded successfully", "size": len(file_data)}
+
+if __name__ == '__main__':
+    server = MyServer()
+    server.run(host='0.0.0.0', port=5000)
+```
+
+> 📘 **Note:** See [Flask Configuration Documentation](https://flask.palletsprojects.com/en/latest/config/) for a complete list of available configuration options.
 
 ### Example
 

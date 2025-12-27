@@ -10,7 +10,7 @@ import traceback
 from enum import Enum
 from functools import wraps
 
-from flask import Flask, jsonify, request, redirect
+from flask import Flask, jsonify, request, redirect, send_file
 from flask_cors import CORS
 
 from .logger import LoggerWriter, enter_exit_logger, setup_logger  # type: ignore
@@ -203,9 +203,20 @@ class SimpleServer(metaclass=MetaSimpleServer):
     to bind an endpoint to a spesific HTTP method (GET, POST, etc.), before super  
     add to self._endpoint_method_map  key, value pair i.e. self._endpoint_method_map['/new_endpoint'] = ['POST']
 
-    try: 
+    Custom Flask Configuration:
+    To add custom Flask configurations, set the custom_flask_configs class variable in your subclass.
+    This dictionary will be applied to Flask's app.config during initialization.
+
+    Example: 
 
     class MyServer(SimpleServer):
+        # Custom Flask configuration
+        custom_flask_configs = {
+            'MAX_CONTENT_LENGTH': 16 * 1024 * 1024,  # 16MB max file upload
+            'JSON_SORT_KEYS': False,  # Don't sort JSON keys
+            'SEND_FILE_MAX_AGE_DEFAULT': 0  # Disable caching for development
+        }
+
         def __init__(self, demo_mode: bool = False, app_name: str = "MyServerApp"):
             self._endpoint_method_map['post_example'] = ['POST']
             super().__init__(demo_mode=demo_mode, app_name=app_name)
@@ -235,6 +246,9 @@ class SimpleServer(metaclass=MetaSimpleServer):
             return f'{var1=}, {var2=}, {var3=}'
 
     """
+
+    custom_flask_configs: dict = {} # add any custom flask configs here as key, value pairs
+
     def __init__(self, demo_mode: bool = False, app_name: str = "simple_server", verbose: bool = False) -> None:
         """
         Initializes the server application.
@@ -251,13 +265,17 @@ class SimpleServer(metaclass=MetaSimpleServer):
             :ivar logger: The logger instance for the server.
             :ivar run: Reference to the Flask app's run method.
             
-            Initializes the Flask application, sets up CORS, configures logging, and registers all endpoints.
+            Initializes the Flask application, sets up CORS, applies custom Flask configurations from 
+            the custom_flask_configs class variable, configures logging, and registers all endpoints.
             If demo mode is enabled, logs an informational message.
         """
         self.demo_mode = demo_mode
         self.logger_name = app_name
         self.app = Flask(app_name)
         CORS(self.app)
+
+        for key, value in self.custom_flask_configs.items():
+            self.app.config[key] = value
         
         # Add case-insensitive routing
         @self.app.before_request
@@ -283,6 +301,9 @@ class SimpleServer(metaclass=MetaSimpleServer):
         sys.stdout = LoggerWriter(self.logger, level=20)  # INFO
         sys.stderr = LoggerWriter(self.logger, level=40)  # ERROR
         self.set_verbose(verbose)
+        
+        if self.custom_flask_configs:
+            self.logger.debug(f"Applied custom Flask configurations: {self.custom_flask_configs}")
 
         self.run = self.app.run
         if self.demo_mode:
