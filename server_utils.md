@@ -114,6 +114,92 @@ if __name__ == '__main__':
 
 > ⚠️ **Security Note:** It's recommended to use `ALLOWED_DOWNLOAD_PATHS` (whitelist) over `BLOCKED_DOWNLOAD_PATHS` (blacklist) for better security. If `ALLOWED_DOWNLOAD_PATHS` is configured, files can only be downloaded from within those directories.
 
+### Built-in Upload Endpoint
+
+SimpleServer provides a built-in `/upload` endpoint for receiving file uploads securely.
+
+**Usage:**
+
+```bash
+# Upload via curl
+curl -X POST -F "file=@/path/to/local/file.txt" http://localhost:5000/upload
+
+# Upload with custom filename
+curl -X POST -F "file=@/path/to/local/file.txt" -F "filename=custom_name.txt" http://localhost:5000/upload
+```
+
+**Python Example:**
+
+```python
+import requests
+
+# Upload a file
+with open("/path/to/local/file.txt", "rb") as f:
+    response = requests.post(
+        "http://localhost:5000/upload",
+        files={"file": f}
+    )
+
+if response.status_code == 201:
+    result = response.json()
+    print(f"✅ Uploaded: {result['data']['filename']} ({result['data']['size']} bytes)")
+else:
+    print(f"❌ Error: {response.json()['data']['error']}")
+
+# Upload with custom filename
+with open("/path/to/local/file.txt", "rb") as f:
+    response = requests.post(
+        "http://localhost:5000/upload",
+        files={"file": f},
+        data={"filename": "custom_name.txt"}
+    )
+```
+
+**Security Features:**
+
+- **Path Traversal Protection**: Filenames are sanitized to remove directory components and dangerous characters.
+- **Regex-based Blocklist**: Configure `UPLOAD_BLOCKED_PATTERNS` to block files matching regex patterns.
+- **Directory Restriction**: Files are always saved within `UPLOAD_DIRECTORY_PATH`.
+
+**Configuration Options:**
+
+| Config Key | Description | Default |
+|------------|-------------|---------|
+| `UPLOAD_DIRECTORY_PATH` | Directory where uploaded files are saved | `./uploads/` |
+| `UPLOAD_BLOCKED_PATTERNS` | List of regex patterns to block filenames | `[]` |
+| `MAX_CONTENT_LENGTH` | Maximum upload size (Flask built-in) | No limit |
+
+**Configuration Example:**
+
+```python
+from restkit_server import SimpleServer
+
+class SecureUploadServer(SimpleServer):
+    custom_flask_configs = {
+        # Upload directory
+        'UPLOAD_DIRECTORY_PATH': '/var/www/uploads',
+        
+        # Block dangerous file types using regex patterns
+        'UPLOAD_BLOCKED_PATTERNS': [
+            r'\.exe$',      # Block .exe files
+            r'\.bat$',      # Block .bat files
+            r'\.sh$',       # Block .sh files
+            r'\.php$',      # Block .php files
+            r'^\.',         # Block hidden files (starting with .)
+            r'\.\.+',       # Block files with multiple dots (potential traversal)
+        ],
+        
+        # Limit upload size to 16MB
+        'MAX_CONTENT_LENGTH': 16 * 1024 * 1024
+    }
+
+if __name__ == '__main__':
+    server = SecureUploadServer()
+    server.run(host='0.0.0.0', port=5000)
+```
+
+> ⚠️ **Security Note:** Always configure `UPLOAD_BLOCKED_PATTERNS` in production to prevent uploading of executable or dangerous files. Consider also setting `MAX_CONTENT_LENGTH` to limit upload sizes.
+
 ### Logging
 
 RestKit Server includes comprehensive logging:

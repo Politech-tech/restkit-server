@@ -5,8 +5,9 @@ utilities for Flask applications
 
 
 import inspect
+import re
 import sys
-import os 
+import os
 import traceback
 from enum import Enum
 from functools import wraps
@@ -53,7 +54,7 @@ class RestResponse:
         self.response = jsonify({"status": self.status,
                                  "data": self.data,
                                  "code": self.code.value}), self.code.value
-    
+
     @staticmethod
     def create(data: dict, code: int | str | RestCodes = 200, status: str = None) -> tuple:
         """
@@ -65,13 +66,13 @@ class RestResponse:
         """
         if not isinstance(code, RestCodes):
 
-            try: 
+            try:
                 if isinstance(code, str):
                     if code.isdigit():
                         code = RestCodes(int(code))
                     else:
                         code = RestCodes[code.upper()]
-                
+
                 elif isinstance(code, int):
                     code = RestCodes(code)
 
@@ -80,15 +81,15 @@ class RestResponse:
 
         response = RestResponse(data, code, status)
         return response.response
-    
+
 
 class MetaSimpleServer(type):
     """
-    this is a meta class for SimpleServer 
+    this is a meta class for SimpleServer
 
     this meta class will make sure that any method in the SimpleServer that does't start with `_` is treated as a REST endpoint.
 
-    
+
     In MetaSimpleServer.__new__:
     We use inspect.getmembers to wrap all public methods, including inherited ones,
     so that endpoints are available in subclasses as well.
@@ -96,27 +97,27 @@ class MetaSimpleServer(type):
 
     def __new__(mcs, name, bases, attrs):
         """
-        this magic method is called when a new class is created 
+        this magic method is called when a new class is created
         it will iterate over all the methods in the class and if the method doesn't start with `_` it will be registered as a REST endpoint.
         """
         # Methods that should not be registered as endpoints
         excluded_methods = {'set_verbose'}
-        
+
         # create the new instance than update it, this is done
         # so we can inspect the methods of the new instance with its hierarchy
         # other wise we would only see the methods of the base class
         attrs['_endpoint_map'] = {}
         attrs['_endpoint_method_map'] = {}
-        new_instance = super().__new__(mcs, name, bases, attrs) 
+        new_instance = super().__new__(mcs, name, bases, attrs)
         # predicate checks for both functions and methods by lambda if either is true it will return the member
-        all_attrs = inspect.getmembers(new_instance, predicate=lambda x: inspect.isfunction(x) or inspect.ismethod(x))       
+        all_attrs = inspect.getmembers(new_instance, predicate=lambda x: inspect.isfunction(x) or inspect.ismethod(x))
         for key, value in all_attrs:
             if not key.startswith("_") and key not in excluded_methods:
                 # Register the method as a REST endpoint
                 # Use the class name as logger name for unified logging
                 new_method = mcs._wrap_endpoint(value, logger_name=name)
                 setattr(new_instance, key, new_method)
-                
+
                 path = f'/{key}'.lower()
 
                 if path in new_instance._endpoint_map:
@@ -125,7 +126,7 @@ class MetaSimpleServer(type):
 
         for property_name, property_obj in inspect.getmembers(new_instance, predicate=lambda x: isinstance(x, property)):
             if not property_name.startswith("_"):
-                # Create a getter method for the property endpoint 
+                # Create a getter method for the property endpoint
                 # Use a factory function to capture property_name correctly in the closure
                 def make_property_getter(prop_name):
                     def property_getter(self):
@@ -136,7 +137,7 @@ class MetaSimpleServer(type):
                 property_getter = make_property_getter(property_name)
                 wrapped_getter = mcs._wrap_endpoint(property_getter)
                 wrapped_getter.__name__ = f'_property_getter_{property_name}'
-                
+
                 setattr(new_instance, f'_property_getter_{property_name}', wrapped_getter)
                 path = f'/property/{property_name}'.lower()
                 if path in new_instance._endpoint_map:
@@ -144,7 +145,7 @@ class MetaSimpleServer(type):
                 new_instance._endpoint_map[path] = f'_property_getter_{property_name}'
 
         return new_instance
-        
+
     @classmethod
     def _wrap_endpoint(mcs, func, logger_name=None):
         """
@@ -167,7 +168,7 @@ class MetaSimpleServer(type):
                 # if json data is sent, update kwargs with the json data
                 query_params = request.args.to_dict(flat=True)
                 kwargs.update(query_params)
-                
+
                 if request.is_json:
                     input_data = request.get_json()
                     kwargs.update(input_data)
@@ -177,21 +178,21 @@ class MetaSimpleServer(type):
                 if isinstance(result, tuple) and len(result) == 2:
                     data, code = result
                     return RestResponse.create(data, code)
-                
+
                 return RestResponse.create(result)
-            
+
             except Exception as e:
                 print(traceback.format_exc())
                 return RestResponse.create({"error": str(e)}, RestCodes.INTERNAL_SERVER_ERROR)
 
-        wrapper._is_wrapped = True # Mark the function as wrapped to avoid double-wrapping
+        wrapper._is_wrapped = True  # Mark the function as wrapped to avoid double-wrapping
         return wrapper
 
 
 class SimpleServer(metaclass=MetaSimpleServer):
     """
     A simple Flask server infrastructure.
-    
+
     this class provides endpoints :
     - /
     - /index
@@ -201,14 +202,14 @@ class SimpleServer(metaclass=MetaSimpleServer):
 
     to add a new endpoint, simply define a new method in this class with a unique name (that doesn't start with an underscore).
 
-    to bind an endpoint to a spesific HTTP method (GET, POST, etc.), before super  
+    to bind an endpoint to a spesific HTTP method (GET, POST, etc.), before super
     add to self._endpoint_method_map  key, value pair i.e. self._endpoint_method_map['/new_endpoint'] = ['POST']
 
     Custom Flask Configuration:
     To add custom Flask configurations, set the custom_flask_configs class variable in your subclass.
     This dictionary will be applied to Flask's app.config during initialization.
 
-    Example: 
+    Example:
 
     class MyServer(SimpleServer):
         # Custom Flask configuration
@@ -221,7 +222,7 @@ class SimpleServer(metaclass=MetaSimpleServer):
         def __init__(self, demo_mode: bool = False, app_name: str = "MyServerApp"):
             self._endpoint_method_map['post_example'] = ['POST']
             super().__init__(demo_mode=demo_mode, app_name=app_name)
-            
+
         def hello_world(self) -> dict:
             '''
             Returns a hello world message.
@@ -233,12 +234,12 @@ class SimpleServer(metaclass=MetaSimpleServer):
             Returns an error message.
             '''
             raise Exception("This is an error message.")
-        
+
         def spesific_http_code(self) -> tuple:
             '''
             Returns a specific HTTP status code.
             '''
-            return {"message": "This endpoint returns a specific HTTP status code."}, 204 
+            return {"message": "This endpoint returns a specific HTTP status code."}, 204
 
         def post_example(self, var1, var2, var3='default') -> str:
             '''
@@ -248,12 +249,12 @@ class SimpleServer(metaclass=MetaSimpleServer):
 
     """
 
-    custom_flask_configs: dict = {} # add any custom flask configs here as key, value pairs
+    custom_flask_configs: dict = {}  # add any custom flask configs here as key, value pairs
 
     def __init__(self, demo_mode: bool = False, app_name: str = "simple_server", verbose: bool = False) -> None:
         """
         Initializes the server application.
-            
+
             :param demo_mode: If True, enables demo mode with additional logging.
             :type demo_mode: bool, optional
             :param app_name: The name of the application.
@@ -265,8 +266,8 @@ class SimpleServer(metaclass=MetaSimpleServer):
             :ivar app: The Flask application instance.
             :ivar logger: The logger instance for the server.
             :ivar run: Reference to the Flask app's run method.
-            
-            Initializes the Flask application, sets up CORS, applies custom Flask configurations from 
+
+            Initializes the Flask application, sets up CORS, applies custom Flask configurations from
             the custom_flask_configs class variable, configures logging, and registers all endpoints.
             If demo mode is enabled, logs an informational message.
         """
@@ -277,13 +278,13 @@ class SimpleServer(metaclass=MetaSimpleServer):
 
         for key, value in self.custom_flask_configs.items():
             self.app.config[key] = value
-        
+
         # Add case-insensitive routing
         @self.app.before_request
         def normalize_url():
             """Normalize URL paths to lowercase for case-insensitive routing."""
             if request.path != request.path.lower():
-                
+
                 # Preserve query string if present
                 if request.query_string:
                     new_url = request.path.lower() + '?' + request.query_string.decode('utf-8')
@@ -291,12 +292,12 @@ class SimpleServer(metaclass=MetaSimpleServer):
                     new_url = request.path.lower()
                 return redirect(new_url, code=308)
             return None
-        
+
         # setup logger
         self.logger = setup_logger(self.__class__.__name__)
-        ## add werkzeug logger(flask)
+        # add werkzeug logger(flask)
         setup_logger('werkzeug')
-        ## redirect stdout and stderr
+        # redirect stdout and stderr
         self._original_stdout = sys.stdout
         self._original_stderr = sys.stderr
         sys.stdout = LoggerWriter(self.logger, level=20)  # INFO
@@ -312,14 +313,18 @@ class SimpleServer(metaclass=MetaSimpleServer):
 
         # route stdout & stderr to logger
 
-        self._endpoint_map['/'] = 'index' # Map the root URL to the index method 
+        self._endpoint_map['/'] = 'index'  # Map the root URL to the index method
 
         self._register_endpoints()
 
         # add download endpoint
         logger_decorated_download = enter_exit_logger(self.logger_name)(self._download)
         self.app.route('/download', methods=['GET'])(logger_decorated_download)
-        
+
+        # add upload endpoint
+        logger_decorated_upload = enter_exit_logger(self.logger_name)(self._upload)
+        self.app.route('/upload', methods=['POST'])(logger_decorated_upload)
+
     @property
     def verbose(self) -> bool:
         """
@@ -352,7 +357,6 @@ class SimpleServer(metaclass=MetaSimpleServer):
                 handler.setLevel("INFO")
             self.logger.info("Verbose logging disabled.")
 
-
     def _register_endpoints(self):
         for route, func_name in self._endpoint_map.items():
             methods = self._endpoint_method_map.get(func_name, ["GET", "POST"])
@@ -361,7 +365,7 @@ class SimpleServer(metaclass=MetaSimpleServer):
 
     def index(self) -> tuple:
         """
-        Returns the index page. 
+        Returns the index page.
 
         the index page lists all available API endpoints.
         """
@@ -374,7 +378,7 @@ class SimpleServer(metaclass=MetaSimpleServer):
             routes.append({"endpoint": rule.endpoint, "methods": list(rule.methods), "url": str(rule), 'docs': docs})
 
         return {"message": f"Welcome to the {self.__class__.__name__} ", "routes": routes}
-    
+
     def get_run_mode(self) -> tuple:
         """
         Returns the current run mode of the server.
@@ -396,12 +400,14 @@ class SimpleServer(metaclass=MetaSimpleServer):
         Security Features:
         - Path traversal protection: Paths are normalized to prevent directory traversal attacks.
         - Blocked paths: Configure BLOCKED_DOWNLOAD_PATHS in custom_flask_configs to block specific paths.
-        - Allowed paths (whitelist): Configure ALLOWED_DOWNLOAD_PATHS in custom_flask_configs to restrict 
+        - Allowed paths (whitelist): Configure ALLOWED_DOWNLOAD_PATHS in custom_flask_configs to restrict
           downloads to specific directories. If set, only files within these directories can be downloaded.
 
         :return: The file as an attachment, or an error response.
         :rtype: Response
         """
+        self.logger.debug("Download request received")
+
         # get path from url query parameter
         file_path = request.args.get('path', None)
 
@@ -415,10 +421,14 @@ class SimpleServer(metaclass=MetaSimpleServer):
 
         # validate file path parameter
         if not file_path:
+            self.logger.debug("Download request rejected: no file path provided")
             return RestResponse.create({"error": "No file path provided"}, RestCodes.BAD_REQUEST)
+
+        self.logger.debug(f"Download requested for path: {file_path}")
 
         # normalize path to prevent directory traversal attacks (e.g., ../../etc/passwd)
         file_path = os.path.realpath(file_path)
+        self.logger.debug(f"Normalized path: {file_path}")
 
         # check for allowed paths (whitelist) - if configured, file must be within one of these directories
         allowed_paths = self.app.config.get('ALLOWED_DOWNLOAD_PATHS', [])
@@ -428,6 +438,7 @@ class SimpleServer(metaclass=MetaSimpleServer):
                 for allowed_path in allowed_paths
             )
             if not is_allowed:
+                self.logger.info(f"Download blocked: path '{file_path}' not in allowed paths")
                 return RestResponse.create(
                     {"error": "Access to the specified file path is not allowed"},
                     RestCodes.FORBIDDEN
@@ -441,6 +452,7 @@ class SimpleServer(metaclass=MetaSimpleServer):
                 for blocked_path in blocked_paths
             )
             if is_blocked:
+                self.logger.info(f"Download blocked: path '{file_path}' matches blocked path")
                 return RestResponse.create(
                     {"error": "Access to the specified file path is blocked"},
                     RestCodes.FORBIDDEN
@@ -448,9 +460,11 @@ class SimpleServer(metaclass=MetaSimpleServer):
 
         # check if file exists
         if not os.path.isfile(file_path):
+            self.logger.debug(f"Download failed: file not found at '{file_path}'")
             return RestResponse.create({"error": f"File not found: {file_path}"}, RestCodes.NOT_FOUND)
 
         base_name = os.path.basename(file_path)
+        self.logger.info(f"Sending file: {base_name} ({file_path})")
         try:
             return send_file(file_path, as_attachment=True, download_name=base_name)
         except Exception as e:
@@ -458,8 +472,108 @@ class SimpleServer(metaclass=MetaSimpleServer):
             self.logger.debug(trace)
             self.logger.error(f"Error sending file {file_path}: {str(e)}")
             return RestResponse.create({"error": str(e)}, RestCodes.INTERNAL_SERVER_ERROR)
-            
-        
+
+    def _upload(self) -> Response:
+        """
+        Upload a file to the server.
+
+        The file should be sent as multipart/form-data with the file field named 'file'.
+        Optionally, a 'filename' field can be provided to override the original filename.
+
+        Configuration Options (via custom_flask_configs):
+        - UPLOAD_DIRECTORY_PATH: Directory where files are uploaded (default: './uploads/')
+        - UPLOAD_BLOCKED_PATTERNS: List of regex patterns to block certain filenames.
+          Example: [r'\\.exe$', r'\\.bat$', r'^\\..+'] blocks .exe, .bat files and hidden files.
+        - UPLOAD_MAX_FILE_SIZE: Maximum file size in bytes (uses Flask's MAX_CONTENT_LENGTH if not set)
+
+        Security Features:
+        - Path traversal protection: Filenames are sanitized to prevent directory traversal.
+        - Regex-based blocklist: Configure UPLOAD_BLOCKED_PATTERNS to block files matching patterns.
+        - Directory restriction: Files are always saved within UPLOAD_DIRECTORY_PATH.
+
+        :return: JSON response with upload status and file info, or an error response.
+        :rtype: Response
+        """
+        self.logger.debug("Upload request received")
+
+        # check if request has file
+        if 'file' not in request.files:
+            self.logger.debug("Upload request rejected: no file in request")
+            return RestResponse.create({"error": "No file provided"}, RestCodes.BAD_REQUEST)
+
+        file = request.files['file']
+
+        # check if file was selected
+        if file.filename == '':
+            self.logger.debug("Upload request rejected: empty filename")
+            return RestResponse.create({"error": "No file selected"}, RestCodes.BAD_REQUEST)
+
+        # get filename - use provided filename or original
+        filename = request.form.get('filename', file.filename)
+        self.logger.debug(f"Upload request for file: {filename}")
+
+        # sanitize filename to prevent path traversal
+        # remove any directory components and dangerous characters
+        original_filename = filename
+        filename = os.path.basename(filename)
+        filename = filename.replace('\\', '').replace('/', '')
+
+        if original_filename != filename:
+            self.logger.debug(f"Filename sanitized: '{original_filename}' -> '{filename}'")
+
+        if not filename:
+            self.logger.debug("Upload rejected: filename empty after sanitization")
+            return RestResponse.create({"error": "Invalid filename"}, RestCodes.BAD_REQUEST)
+
+        # check against blocked patterns (regex-based blocklist)
+        blocked_patterns = self.app.config.get('UPLOAD_BLOCKED_PATTERNS', [])
+        for pattern in blocked_patterns:
+            try:
+                if re.search(pattern, filename, re.IGNORECASE):
+                    self.logger.info(f"Upload blocked: filename '{filename}' matches pattern '{pattern}'")
+                    return RestResponse.create(
+                        {"error": f"Filename '{filename}' matches blocked pattern"},
+                        RestCodes.FORBIDDEN
+                    )
+            except re.error as e:
+                self.logger.warning(f"Invalid regex pattern '{pattern}': {e}")
+
+        # get upload directory
+        upload_dir = self.app.config.get('UPLOAD_DIRECTORY_PATH', './uploads/')
+
+        # ensure upload directory exists
+        upload_dir = os.path.realpath(upload_dir)
+        os.makedirs(upload_dir, exist_ok=True)
+        self.logger.debug(f"Upload directory: {upload_dir}")
+
+        # build full file path
+        file_path = os.path.join(upload_dir, filename)
+
+        # ensure file path is still within upload directory (extra safety check)
+        file_path = os.path.realpath(file_path)
+        if not file_path.startswith(upload_dir):
+            self.logger.info(f"Upload blocked: path traversal detected for '{filename}'")
+            return RestResponse.create(
+                {"error": "Invalid filename - path traversal detected"},
+                RestCodes.FORBIDDEN
+            )
+
+        try:
+            file.save(file_path)
+            file_size = os.path.getsize(file_path)
+            self.logger.info(f"File uploaded: {filename} ({file_size} bytes)")
+            return RestResponse.create({
+                "message": "File uploaded successfully",
+                "filename": filename,
+                "path": file_path,
+                "size": file_size
+            }, RestCodes.CREATED)
+        except Exception as e:
+            trace = traceback.format_exc()
+            self.logger.debug(trace)
+            self.logger.error(f"Error saving file {filename}: {str(e)}")
+            return RestResponse.create({"error": str(e)}, RestCodes.INTERNAL_SERVER_ERROR)
+
 
 class AdvancedServer(SimpleServer):
     """
@@ -552,12 +666,12 @@ class AdvancedServer(SimpleServer):
 
                     def property_getter(prop_name=property_name, unit_inst=inst):
                         return getattr(unit_inst, prop_name)
-                         
-                    setattr(self, f'{unit_name}_property_{property_name}', property_getter)        
+
+                    setattr(self, f'{unit_name}_property_{property_name}', property_getter)
 
             # Update endpoint paths for a pretty path /unit_method -> /unit/method
             for path, value in list(self._endpoint_map.items()):
-                
+
                 if path.startswith(f'/{unit_name}_property_'):
                     new_path = path.replace(f'/{unit_name}_property_', f'/{unit_name}/property/')
                     self._endpoint_map[new_path] = value
